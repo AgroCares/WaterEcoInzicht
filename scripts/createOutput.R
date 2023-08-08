@@ -3308,7 +3308,6 @@ krwmap <- function(gKRW, gEAG){
     addProviderTiles("Esri.WorldGrayCanvas")%>%
     addLegend("bottomright", colors=mypal, labels=gKRW$OWMNAAM)
 }
-
 eagoverzicht <- function(gEAG, eag_wl){
 
   tabset1 <- merge(gEAG, eag_wl, by = 'GAFIDENT',  all.x = TRUE, duplicateGeoms = T)

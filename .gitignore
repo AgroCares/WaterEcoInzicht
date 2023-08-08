@@ -2,3 +2,15 @@
 .Rhistory
 .RData
 .Ruserdata
+data
+ekr_scores1.rds
+ekr_scores2.rds
+input
+renv
+renv.lock
+output
+EKRset.rds
+atlas_toestand_ecologie.html
+atlas_toestand_ecologie_files
+libs
+map_oordeel_waterlichaam.jpg

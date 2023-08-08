@@ -159,7 +159,7 @@ make_map_pie <- function(pl, dt, bkpl = NULL,
   
   ## Join Data table to map ----
   if(ekr_fac == TRUE){
-    # when EKR is factor, convert that to integer 1 - 4
+  # when EKR is factor, convert that to integer 1 - 4
    dt$ekrval <- as.numeric(factor(as.factor(dt$ekrval), levels = ekr_order))
   }
   

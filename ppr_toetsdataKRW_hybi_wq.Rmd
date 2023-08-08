@@ -150,9 +150,9 @@ ekr_scores <- tabelEKRPerWLEnEAGPerJaar(EKRset, detail = "deel")
 
 ekr_scores_wbp1 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2005 & EKRset$jaar < 2015,], detail = "deel")
 ekr_scores_wbp2 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2010 & EKRset$jaar < 2021,], detail = "deel")
-# aggregated waterbody scores for app
+# aggregated waterbody scores for app and atlas toestand
 ekr_scores1 <- ekr_scores[!grepl("^NL11_*",id), ] # alleen gewogen scores selecteren
-# non aggregated scores for tab per EAG for app
+# non aggregated scores for tab per EAG for app and atlas toestand
 ekr_scores2 <- ekr_scores[grepl("^NL11_*",id), ] # alleen ongewogen scores selecteren
 
 # save subsets
@@ -199,13 +199,13 @@ saveRDS(wq, "data/ImportWQ", compress = "xz")
 
 ```{r}
 # laden: Rdata file die meegestuurd is
-dat <- readRDS("../pbelasting/dat.rds") # data kan worden gecreerd obv script: loadbalances
+dat <- readRDS("./data/dat.rds") # data kan worden gecreerd obv script: loadbalances
 dat[,date := as.POSIXct(paste0(jaar,"-",maand,"-01"), format = '%Y-%m-%d')]
 
 # nonogram
-nomogram <- data.table::fread('../data/nomogram.csv')
+nomogram <- data.table::fread('../input/nomogram.csv')
 # datafile with P-load PC Ditch
-Overzicht_kP <- data.table::fread('../data/Overzicht_kP.csv')
+Overzicht_kP <- data.table::fread('../input/Overzicht_kP.csv')
 Overzicht_kP <- ppr_pcditch(db = Overzicht_kP)
 pvskp <- ppr_pmaps(dat, Overzicht_kp, hybi, nomogram) 
 saveRDS(pvskp, file ='./data/pvskp.rds')

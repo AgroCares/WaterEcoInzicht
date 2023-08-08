@@ -66,9 +66,9 @@ dat <- dat[dat$selectiefilter == 1,]
 #kaart met berekende retentie
 dat$p_retentie <- dat$wp_min_sum - dat$wp_meting_mgm2d
 # table with kP for different debiet, depth and soiltype
-nomogram <- data.table::fread('./data/nomogram.csv')
+nomogram <- data.table::fread('./input/nomogram.csv')
 # datafile with P-load PC Ditch
-Overzicht_kP <- data.table::fread('./data/Overzicht_kP.csv')
+Overzicht_kP <- data.table::fread('./input/Overzicht_kP.csv')
 Overzicht_kP <- ppr_pcditch(db = Overzicht_kP)
 pvskp <- ppr_pmaps(dat, Overzicht_kp, hybi, nomogram, pYEAR = TRUE)
 
