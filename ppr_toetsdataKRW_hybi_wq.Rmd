@@ -1,0 +1,217 @@
+---
+title: "Nabewerking Aquo-kit gegevens hydrobiologie voor vervolganalyse"
+subtitle: "Generen gegevens voor dashboard Gezond Water, KRW app en andere visualisaties"
+date: "`r Sys.Date()`"
+runtime: shiny
+documentclass: book
+site: bookdown::bookdown_site
+always_allow_html: yes
+delete_merged_file: TRUE
+output: 
+  flexdashboard::flex_dashboard:
+    css: css/factsheet.css
+    orientation: rows
+    vertical_layout: scroll
+    logo: images/WN__Waternet-RGB_small.png
+---
+
+In dit document staat de R code waarmee KRW-toetsresultaten van hydrologische gegevens uit de Aquo-kit kunnen worden samengevoegd, verreikt met gebiedsinformatie en geaggregeerd tot scores, oordelen en trends per gebied. 
+
+Daarnaast staan er een aantal functies voor het verwerken (importeren en vertalen naar juiste format) van gegevens over hydrologie en waterkwaliteit. *Hieraan moet nog validatie worden toegevoegd tbv de website met ecologische data voor boeren.*
+
+De output van dit script vormt de input voor de Shiny app met KRW toetsresultaten, de overzichtsrapportage met de ecologische toestand in het beheergebied van AGV en de website waarop data wordt ontsloten. 
+
+```{r settings, echo = FALSE, message= FALSE, include = FALSE}
+#  Settings-------------------------------------------------------
+rm(list=ls()) #maakt geheugen leeg voor aanvang
+options(encoding = "UTF-8")
+
+#  Directories and names------------------------------------------
+#  Define the year the data is created 
+toetsjaar <- "2023"
+dirKRW <- "./data/krw/"
+
+# Load packages and functions-------------------------------------
+require(dplyr)
+require(data.table)
+require(rmarkdown)
+require(broom)
+
+source('./scripts/ppr_funs_waterecoinzicht.R')
+```
+
+```{r algemeen data}
+# load location info used in multiple chunks below
+locaties <- data.table::fread('./input/gebiedsinfo/Location.csv')
+eag_wl <- data.table::fread('./input/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv')
+eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
+```
+
+# KRW data
+
+In onderstaande code worden benodigde data geïmporteerd. Gegevens van overig water en KRW worden als aparte data-sets aangeboden, omdat deze apart van elkaar worden getoetst in de Aquo-kit en de gebiedsbegrenzing en metagegevens van deze data-sets verschillen. Voor visualisatie kunnen deze sets weer worden samengevoegd. 
+
+De inputgegevens die nodig zijn bestaan zowel uit invoergegevens die worden geïmporteerd in de Aquo-kit als uit de resultaten die worden geëxporteerd uit de Aquo-kit. Het gaat daarbij om:
+1. bestanden met toetsresultaten van ieder kwaliteitselement (macrofauna, macrofyten, fytoplankton en vis) 
+2. meetlocaties die zijn gebruikt bij de toetsing (input voor de Aquo-Kit)
+3. basisgegevens met gebiedsindeling in Ecologische analysegebieden (EAG's) en de relatie tussen deze gebieden en meetlocaties en KRW-waterlichamen. Hierbij is het van belang dat de versie van EAG's die gebruikt worden hetzelfde is als de versie die is gebruikt voor de toestandsbepaling. De relatie EAG's en meetlocaties kan ruimtelijk worden bepaald, maar het is van belang dezelfde koppeling te gebruiken als bij de toetsing.
+
+```{r pprkrw, include = FALSE}
+# load input------------------------------------------------------
+# indeling maatlatten en relatie met deelmaatlatten en indicatoren
+orderMaatlatten <- fread('./input/domeinen_krw/orderMaatlatten.csv') 
+
+for(gebiedlevel in c("KRW","OvWater")){
+# 1. bestanden met toetsresultaten van ieder kwaliteitselement (macrofauna, macrofyten, fytoplankton en vis) 
+dirExportAquo <- paste0("./input/rapportagefiles_",gebiedlevel,toetsjaar)    
+# 2. meetlocaties die zijn gebruikt bij de toetsing (input voor de Aquo-Kit)
+dirMeetpuntenAquo <- paste0("./input/meetpunteninfo_",gebiedlevel,toetsjaar)
+
+# alle resultaten uit de Aquo-kit from toetsjaar and gebied/ system bounderies (EAG or KRW)
+EKRlijst <- importAquoResult(path = dirExportAquo, pattern = ".csv") 
+# 3. basisgegevens met gebiedsindeling in Ecologische analysegebieden en de relatie tussen deze gebieden en meetlocaties. Let op dat de versie van EAG's die gebruikt worden hetzelfde is als de versie die is gebruikt voor de toestandsbepaling. De relatie EAG's meetlocaties kan ruimtelijk worden bepaald, maar het is van belang dezelfde koppeling te gebruiken als bij de toetsing.
+meetpuntenAquo <- importMeetpunten(path = dirMeetpuntenAquo)
+# load domain table 2 map locations 2 EAG
+meetpuntenGebied <- fread('./input/gebiedsinfo/meetlocaties_gebied.csv')
+
+# Bewerken data / proces data ---------------------------------------------------
+# convert this to a function
+EKRlijst$klasse <- as.factor(EKRlijst$Classificatie)
+EKRlijst$Classificatie <- as.factor(EKRlijst$Classificatie)
+# add location info (EAG) to results
+EKRlijst <- kopDat(meetpuntenAquo, meetpuntenGebied, EKRlijst)
+# remove samplelocations that are not allocated to an EAG
+NA -> EKRlijst$EAGIDENT[EKRlijst$EAGIDENT == ""]
+# change names for readability
+EKRlijst$Waardebepalingsmethode.code <- gsub('other:Aquo-kit;Bio-toetsing;KRWmaatlat2012 -' , 'Maatlatten2012', EKRlijst$Waardebepalingsmethode.code)
+EKRlijst$Waardebepalingsmethode.code <- gsub('other:Aquo-kit;Bio-toetsing;KRWmaatlat2018 -' , 'Maatlatten2018', EKRlijst$Waardebepalingsmethode.code)
+# add year
+EKRlijst$jaar<- format(EKRlijst$Begindatum, '%Y')
+EKRlijst$jaar<- as.numeric(EKRlijst$jaar)
+
+# Create subset 4 plots ---------------------------------------
+# select only EKR scores and not the input data
+EKRset<- EKRlijst[EKRlijst$Hoedanigheid.code == 'EKR', ]
+# create a unique waarneming (parameter)
+EKRset$GHPR<- paste(ifelse(is.na(EKRset$Grootheid.omschrijving)|EKRset$Grootheid.omschrijving == '', EKRset$Typering.Omschrijving, EKRset$Grootheid.omschrijving),ifelse(is.na(EKRset$Parameter.omschrijving)|EKRset$Parameter.omschrijving == '',"",EKRset$Parameter.omschrijving))
+# add additional names and order of waarneming/ indicators and subindicators
+EKRset$GHPR <- trimws(EKRset$GHPR)
+orderMaatlatten$GHPR <- trimws(orderMaatlatten$GHPR)
+EKRset$GHPR_level <- orderMaatlatten$GHPR_level[sapply(EKRset$GHPR, function(x) {
+  which.min(stringdist::stringdist(x, orderMaatlatten$GHPR))})]
+EKRset <- merge(EKRset, orderMaatlatten[, c('level','GHPR_level')], by = 'GHPR_level', all.x = TRUE, allow.cartesian = T)
+EKRset <- EKRset[GHPR == 'Waterdiepte', GHPR := as.factor(gsub('Waterdiepte',"Vestigingsdiepte waterplanten", GHPR))]
+
+# add a factor for EKR scores
+'7' -> EKRset$klasse[EKRset$Numeriekewaarde < 0.2]
+'6' -> EKRset$klasse[EKRset$Numeriekewaarde >= 0.2 & EKRset$Numeriekewaarde < 0.4]
+'5' -> EKRset$klasse[EKRset$Numeriekewaarde >= 0.4 & EKRset$Numeriekewaarde < 0.6]
+'4' -> EKRset$klasse[EKRset$Numeriekewaarde >= 0.6 & EKRset$Numeriekewaarde < 0.8]
+'3' -> EKRset$klasse[EKRset$Numeriekewaarde >= 0.8]
+EKRset$klasse <- as.factor(EKRset$klasse)
+EKRset<- EKRset[!EKRset$Grootheid.code %in% c("CONCTTE"),]
+EKRset$XCOORD <- as.integer(EKRset$XCOORD)
+EKRset$YCOORD <- as.integer(EKRset$YCOORD)
+
+# gewogen gemiddelden per waterlichaam -----------------------------------------------
+# convert this into a function
+EKRset$GNW <- EKRset$Numeriekewaarde*EKRset$Wegingsfactor
+TWG <- dcast(EKRset, HoortBijGeoobject.identificatie+KRWwatertype.code+Waardebepalingsmethode.code+GHPR
+             +jaar ~., value.var = "Wegingsfactor", fun.aggregate = sum, na.rm =TRUE)
+EKRset <- left_join(EKRset, TWG) %>% as.data.table()
+EKRset$GGW <- EKRset$GNW/EKRset$.
+
+# opslaan Rdataset --------------------------------
+saveRDS(EKRset, file= paste0(dirKRW,"EKRset",gebiedlevel,toetsjaar,".rds"))
+saveRDS(EKRlijst, file= paste0(dirKRW,"EKRlijst",gebiedlevel,toetsjaar,".rds"))
+}
+
+```
+
+```{r samenvoegenKRWData, include = FALSE}
+
+# inlezen toetsdata
+EKRset <- readRDS(paste0(dirKRW,'EKRsetKRW', toetsjaar,'.rds'))
+EKRset2 <- readRDS(paste0(dirKRW,'EKRsetOvWater', toetsjaar, '.rds'))
+# goals per EAG/ water body
+doelen <- data.table::fread('./input/Doelen.csv')
+
+# add KRW doelen/ goals and addition info of waterbodies
+EKRset <- ppr_ekr(krwset = EKRset, ovwatset = EKRset2, eag_wl = eag_wl, doelen = doelen) 
+saveRDS(EKRset, file= paste0(dirKRW, "EKRset",".rds"))
+EKRset2 <- NULL
+
+## calculate EKR scores per year, average of the last 3 years from EKRset
+ekr_scores <- tabelEKRPerWLEnEAGPerJaar(EKRset, detail = "deel")
+# Referentietoestand = de EERSTE 3 beschikbare meetjaren in de periode 2006 tm 2013 (gelijk aan referentie voor overige wateren)
+# Einde planperiode 1 = LAATSTE 3 beschikbare meetjaren in periode 2003 tm 2014 (gelijk aan Toestand 2015 factsheets in WKP*)
+# Einde planperiode 2 = LAATSET 3 beschikbare meetjaren in periode 2010 tm 2020 (gelijk aan Toestand 2021 factsheets in WKP*)
+# Actueel = LAATSTE 3 beschikbare meetjaren in periode 2011 tm 2021 (meeste recente beschikbare gegevens)
+
+ekr_scores_wbp1 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2005 & EKRset$jaar < 2015,], detail = "deel")
+ekr_scores_wbp2 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2010 & EKRset$jaar < 2021,], detail = "deel")
+# aggregated waterbody scores for app
+ekr_scores1 <- ekr_scores[!grepl("^NL11_*",id), ] # alleen gewogen scores selecteren
+# non aggregated scores for tab per EAG for app
+ekr_scores2 <- ekr_scores[grepl("^NL11_*",id), ] # alleen ongewogen scores selecteren
+
+# save subsets
+saveRDS(ekr_scores, file= paste0(dirKRW, "ekr_scores",".rds"))
+saveRDS(ekr_scores_wbp1, file= paste0(dirKRW, "ekr_scores_wbp1",".rds"))
+saveRDS(ekr_scores_wbp2, file= paste0(dirKRW, "ekr_scores_wbp2",".rds"))
+saveRDS(ekr_scores1, file= paste0(dirKRW, "ekr_scores1",".rds"))
+saveRDS(ekr_scores2, file= paste0(dirKRW, "ekr_scores2",".rds"))
+
+```
+
+```{r krwtrends}
+
+# bereken trend per EAG
+trendekr.eag <- trendkrw(EKRset, agglevel = 'EAG') 
+trendekr.eag <- merge(ekr_scores, trendekr.eag, by = c('id','EAGIDENT','facet_wrap_code', 'GHPR_level','watertype', "GEP_2022","waterlichaam"))
+
+# select only aggregated scores per waterbody/ toetsgebied - trends are calculated based on total average scores per waterbody, NB. individual samples are not used for trends
+ekrtrend <- trendekr.eag[!(grepl('^NL11*', trendekr.eag$id)) & trendekr.eag$level == 1,] 
+# alleen scores per eag op hoofdmaatlatten
+ekrtrendeag <- trendekr.eag[!is.na(trendekr.eag$EAGIDENT) & trendekr.eag$level == 1,] 
+
+saveRDS(trendekr.eag, file = './data/krw/trendekreag.rds')
+saveRDS(ekrtrend, file = './data/krw/ekrtrend.rds')
+saveRDS(ekrtrendeag, file = './data/krw/ekrtrendeag.rds')
+
+```
+
+# Brondata hydrobiologie en waterkwaliteit
+
+```{r ppratlastoestand}
+# pre proces hybi data from FEWS
+hybi <- readRDS('../data/alles_reliable.rds')%>%as.data.table
+hybi <- ppr_hybi(db = hybi, syear = 1990, wtype = eag_wl, mlocs = locaties)
+hybi$meetwaarde <- as.numeric(hybi$meetwaarde)
+saveRDS(hybi, file = './data/hybi.rds')
+
+# pre proces wq data
+wq <- read.csv("../wq/ImportWQ.csv", header = TRUE, na.strings = " ", sep=";", dec =".", stringsAsFactors = F)
+saveRDS(wq, "data/ImportWQ", compress = "xz")
+```
+
+# Waterbalansen laden en bewerken
+
+```{r}
+# laden: Rdata file die meegestuurd is
+dat <- readRDS("../pbelasting/dat.rds") # data kan worden gecreerd obv script: loadbalances
+dat[,date := as.POSIXct(paste0(jaar,"-",maand,"-01"), format = '%Y-%m-%d')]
+
+# nonogram
+nomogram <- data.table::fread('../data/nomogram.csv')
+# datafile with P-load PC Ditch
+Overzicht_kP <- data.table::fread('../data/Overzicht_kP.csv')
+Overzicht_kP <- ppr_pcditch(db = Overzicht_kP)
+pvskp <- ppr_pmaps(dat, Overzicht_kp, hybi, nomogram) 
+saveRDS(pvskp, file ='./data/pvskp.rds')
+```
+
+# Write EAG as an gpkg
+# BRP & Bodemschat
+
+
