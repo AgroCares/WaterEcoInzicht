@@ -6,17 +6,20 @@ date: "`r Sys.Date()`"
 always_allow_html: yes
 delete_merged_file: TRUE
 site: bookdown::bookdown_site
-documentclass: book
 css: css/factsheet.css
 output:
   bookdown::gitbook:
-  split_by: none
-download: yes
-link-citations: yes
-config:
-  toolbar:
-  position: static
-biblio-style: apa
+    lib_dir: assets
+    split_by: none
+    config:
+      toolbar:
+        position: static
+  bookdown::pdf_book:
+    keep_tex: true
+  bookdown::html_book:
+    cache: false
+    css: toc.css
+documentclass: book
 editor_options: 
   chunk_output_type: inline
 ---
@@ -31,6 +34,7 @@ editor_options:
 rm(list=ls())                               #maakt geheugen leeg voor aanvang
 chooseCRANmirror(graphics=FALSE, ind=1)
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+memory.limit(size = 50000)
 
 # Load packages and functions-------------------------------------
 library(scatterpie); library(ggnewscale); library(tmap); library(cowplot); library(ggspatial) # voor map pie figuur
@@ -211,7 +215,7 @@ leaflet() %>%
 ```
 
 
-```{r verschilkaart2, fig.cap = "Verschil tussen de ecologische kwaliteit van de waterplanten aan het einde van de planperiode van SGBP2 (gebaseerd op metingen 2015 t/m 2020) en de drie meest recente meetjaren (2020 t/m 2022).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%'}
+```{r verschilkaart2, fig.cap = "Verschil tussen de ecologische kwaliteit van de waterplanten aan het einde van de planperiode van SGBP2 (gebaseerd op metingen 2015 t/m 2020) en de drie meest recente meetjaren (2020 t/m 2022).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%', eval = FALSE, include=FALSE}
 
 # difference between end wbp2 (2021 - data up 2 2020) and most recent
 wbp23 <- merge(tabsetwbp3[,c('EAGIDENT','id','GHPR_level', 'EKR3jr')], tabsetwbp2, by = c('EAGIDENT','id','GHPR_level'))
@@ -265,7 +269,7 @@ leaflet() %>%
 ```
 
 
-```{r verschilkaart3, fig.cap = "Verschil tussen de ecologische kwaliteit van waterplanten sinds de start van de monitoring (gebaseerd op metingen 2006 t/m 2013) en het einde van de planperiode van SGBP1 (gebaseerd op metingen 2006 t/m 2014).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%'}
+```{r verschilkaart3, fig.cap = "Verschil tussen de ecologische kwaliteit van waterplanten sinds de start van de monitoring (gebaseerd op metingen 2006 t/m 2013) en het einde van de planperiode van SGBP1 (gebaseerd op metingen 2006 t/m 2014).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%', eval = FALSE, include=FALSE}
 
 # difference between end wbp1 (2015 - data up 2 2014) and reference (2006-2013)
 tabsetwbp1$verschil <- tabsetwbp1$EKR3jr - tabsetwbp1$EKRref
@@ -831,6 +835,7 @@ combineWidgets(
 #saveWidget(krw, "visdeelmtlt.html", selfcontained = FALSE)
 ```
 
+
 # Methoden
 ## KRW toetsing
 
@@ -948,9 +953,7 @@ Per (deel)maatlat en ecologisch analysegebied is een lineaire trend in EKR-score
 
 # Bijlagen
 
-## Overzichtstabel met scores, oordelen en ontwikkeling
-
-```{r toestandtrend, fig.cap = "Toestand, oordeel en ontwikkeling", echo = FALSE, message = FALSE, warning= FALSE, out.width='100%'}
+```{r toestandtrend, fig.cap = "Toestand, oordeel en ontwikkeling", echo = FALSE, message = FALSE, warning= FALSE, out.width='100%', eval = FALSE, include = FALSE}
 
 # hier dcast om tabel met header kwaliteitslementen te maken ------
 
@@ -1023,6 +1026,12 @@ typology <- data.frame(
 # save_as_docx(ft, path = "ekrtrendkrwovwat.docx")
     
 ```
+
+## Data en code
+
+Deze rapportage is gemaakt door middel computercode (R en Rmarkdown) hierdoor is deze rapportage volledig reproduceerbaar. De gebruikte code en de gebruikte data zijn beschikbaar via onderstaande link.
+
+[Download hier de code](https://github.com/AgroCares/WaterEcoInzicht) 
 
 
 
