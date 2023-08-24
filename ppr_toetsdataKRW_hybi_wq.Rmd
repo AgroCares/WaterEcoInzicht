@@ -60,6 +60,7 @@ De inputgegevens die nodig zijn bestaan zowel uit invoergegevens die worden geï
 # load input------------------------------------------------------
 # indeling maatlatten en relatie met deelmaatlatten en indicatoren
 orderMaatlatten <- fread('./input/domeinen_krw/orderMaatlatten.csv') 
+orderMaatlatten$GHPR <- trimws(orderMaatlatten$GHPR)
 
 for(gebiedlevel in c("KRW","OvWater")){
 # 1. bestanden met toetsresultaten van ieder kwaliteitselement (macrofauna, macrofyten, fytoplankton en vis) 
@@ -77,10 +78,8 @@ meetpuntenGebied <- fread('./input/gebiedsinfo/meetlocaties_gebied.csv')
 # Bewerken data / proces data ---------------------------------------------------
 # convert this to a function
 EKRlijst$klasse <- as.factor(EKRlijst$Classificatie)
-EKRlijst$Classificatie <- as.factor(EKRlijst$Classificatie)
 # add location info (EAG) to results
 EKRlijst <- kopDat(meetpuntenAquo, meetpuntenGebied, EKRlijst)
-# remove samplelocations that are not allocated to an EAG
 NA -> EKRlijst$EAGIDENT[EKRlijst$EAGIDENT == ""]
 # change names for readability
 EKRlijst$Waardebepalingsmethode.code <- gsub('other:Aquo-kit;Bio-toetsing;KRWmaatlat2012 -' , 'Maatlatten2012', EKRlijst$Waardebepalingsmethode.code)
@@ -89,18 +88,16 @@ EKRlijst$Waardebepalingsmethode.code <- gsub('other:Aquo-kit;Bio-toetsing;KRWmaa
 EKRlijst$jaar<- format(EKRlijst$Begindatum, '%Y')
 EKRlijst$jaar<- as.numeric(EKRlijst$jaar)
 
+# make unique parameter/ waarneming
+EKRlijst$GHPR <- paste(ifelse(is.na(EKRlijst$Grootheid.omschrijving)|EKRlijst$Grootheid.omschrijving == '', EKRlijst$Typering.Omschrijving,EKRlijst$Grootheid.omschrijving),ifelse(is.na(EKRlijst$Parameter.omschrijving)|EKRlijst$Parameter.omschrijving == '',"",EKRlijst$Parameter.omschrijving))
+EKRlijst$GHPR <- trimws(EKRlijst$GHPR)
+#couple parameter 2 leveld parameter legend
+# check <- unique(EKRlijst$GHPR[!(EKRlijst$GHPR %in% unique(orderMaatlatten$GHPR))])
+EKRlijst <- merge(EKRlijst, orderMaatlatten[, c('GHPR','level','GHPR_level')], by = 'GHPR', all.x = TRUE)
+
 # Create subset 4 plots ---------------------------------------
 # select only EKR scores and not the input data
 EKRset<- EKRlijst[EKRlijst$Hoedanigheid.code == 'EKR', ]
-# create a unique waarneming (parameter)
-EKRset$GHPR<- paste(ifelse(is.na(EKRset$Grootheid.omschrijving)|EKRset$Grootheid.omschrijving == '', EKRset$Typering.Omschrijving, EKRset$Grootheid.omschrijving),ifelse(is.na(EKRset$Parameter.omschrijving)|EKRset$Parameter.omschrijving == '',"",EKRset$Parameter.omschrijving))
-# add additional names and order of waarneming/ indicators and subindicators
-EKRset$GHPR <- trimws(EKRset$GHPR)
-orderMaatlatten$GHPR <- trimws(orderMaatlatten$GHPR)
-EKRset$GHPR_level <- orderMaatlatten$GHPR_level[sapply(EKRset$GHPR, function(x) {
-  which.min(stringdist::stringdist(x, orderMaatlatten$GHPR))})]
-EKRset <- merge(EKRset, orderMaatlatten[, c('level','GHPR_level')], by = 'GHPR_level', all.x = TRUE, allow.cartesian = T)
-EKRset <- EKRset[GHPR == 'Waterdiepte', GHPR := as.factor(gsub('Waterdiepte',"Vestigingsdiepte waterplanten", GHPR))]
 
 # add a factor for EKR scores
 '7' -> EKRset$klasse[EKRset$Numeriekewaarde < 0.2]
@@ -129,27 +126,27 @@ saveRDS(EKRlijst, file= paste0(dirKRW,"EKRlijst",gebiedlevel,toetsjaar,".rds"))
 ```
 
 ```{r samenvoegenKRWData, include = FALSE}
-
 # inlezen toetsdata
-EKRset <- readRDS(paste0(dirKRW,'EKRsetKRW', toetsjaar,'.rds'))
-EKRset2 <- readRDS(paste0(dirKRW,'EKRsetOvWater', toetsjaar, '.rds'))
+krwset <- readRDS(paste0(dirKRW,'EKRsetKRW', toetsjaar,'.rds'))
+ovwatset <- readRDS(paste0(dirKRW,'EKRsetOvWater', toetsjaar, '.rds'))
 # goals per EAG/ water body
 doelen <- data.table::fread('./input/Doelen.csv')
 
 # add KRW doelen/ goals and addition info of waterbodies
-EKRset <- ppr_ekr(krwset = EKRset, ovwatset = EKRset2, eag_wl = eag_wl, doelen = doelen) 
+EKRset <- ppr_ekr(krwset = krwset, ovwatset = ovwatset, eag_wl = eag_wl, doelen = doelen) 
 saveRDS(EKRset, file= paste0(dirKRW, "EKRset",".rds"))
 EKRset2 <- NULL
 
 ## calculate EKR scores per year, average of the last 3 years from EKRset
-ekr_scores <- tabelEKRPerWLEnEAGPerJaar(EKRset, detail = "deel")
-# Referentietoestand = de EERSTE 3 beschikbare meetjaren in de periode 2006 tm 2013 (gelijk aan referentie voor overige wateren)
-# Einde planperiode 1 = LAATSTE 3 beschikbare meetjaren in periode 2003 tm 2014 (gelijk aan Toestand 2015 factsheets in WKP*)
-# Einde planperiode 2 = LAATSET 3 beschikbare meetjaren in periode 2010 tm 2020 (gelijk aan Toestand 2021 factsheets in WKP*)
 # Actueel = LAATSTE 3 beschikbare meetjaren in periode 2011 tm 2021 (meeste recente beschikbare gegevens)
+# Referentietoestand = de EERSTE 3 beschikbare meetjaren in de periode 2006 tm 2013 (gelijk aan referentie voor overige wateren)
+ekr_scores <- tabelEKRPerWLEnEAGPerJaar(EKRset, detail = "deel", minjaar = 2012)
+# Einde planperiode 1 = LAATSTE 3 beschikbare meetjaren in periode 2003 tm 2014 (gelijk aan Toestand 2015 factsheets in WKP*) -2009tm2015
+ekr_scores_wbp1 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2005 & EKRset$jaar < 2015,], detail = "deel", minjaar = 2004)
+# Einde planperiode 2 = LAATSET 3 beschikbare meetjaren in periode 2010 tm 2020 (gelijk aan Toestand 2021 factsheets in WKP*) -2016tm2021
+ekr_scores_wbp2 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2014 & EKRset$jaar < 2021,], detail = "deel", minjaar = 2010)
+ekr_scores_wbp3 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2019 & EKRset$jaar < 2027,], detail = "deel", minjaar = 2012)
 
-ekr_scores_wbp1 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2005 & EKRset$jaar < 2015,], detail = "deel")
-ekr_scores_wbp2 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2010 & EKRset$jaar < 2021,], detail = "deel")
 # aggregated waterbody scores for app and atlas toestand
 ekr_scores1 <- ekr_scores[!grepl("^NL11_*",id), ] # alleen gewogen scores selecteren
 # non aggregated scores for tab per EAG for app and atlas toestand
@@ -159,16 +156,16 @@ ekr_scores2 <- ekr_scores[grepl("^NL11_*",id), ] # alleen ongewogen scores selec
 saveRDS(ekr_scores, file= paste0(dirKRW, "ekr_scores",".rds"))
 saveRDS(ekr_scores_wbp1, file= paste0(dirKRW, "ekr_scores_wbp1",".rds"))
 saveRDS(ekr_scores_wbp2, file= paste0(dirKRW, "ekr_scores_wbp2",".rds"))
+saveRDS(ekr_scores_wbp3, file= paste0(dirKRW, "ekr_scores_wbp3",".rds"))
 saveRDS(ekr_scores1, file= paste0(dirKRW, "ekr_scores1",".rds"))
 saveRDS(ekr_scores2, file= paste0(dirKRW, "ekr_scores2",".rds"))
 
 ```
 
 ```{r krwtrends}
-
 # bereken trend per EAG
 trendekr.eag <- trendkrw(EKRset, agglevel = 'EAG') 
-trendekr.eag <- merge(ekr_scores, trendekr.eag, by = c('id','EAGIDENT','facet_wrap_code', 'GHPR_level','watertype', "GEP_2022","waterlichaam"))
+trendekr.eag <- merge(ekr_scores, trendekr.eag[,-c('lastyear','GEP')], by = c('id','EAGIDENT','facet_wrap_code', 'GHPR_level','watertype', "GEP_2022","waterlichaam"))
 
 # select only aggregated scores per waterbody/ toetsgebied - trends are calculated based on total average scores per waterbody, NB. individual samples are not used for trends
 ekrtrend <- trendekr.eag[!(grepl('^NL11*', trendekr.eag$id)) & trendekr.eag$level == 1,] 

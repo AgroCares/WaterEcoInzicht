@@ -18,27 +18,30 @@ importMeetpunten <- function(path = dirMeetpuntenAquo, pattern = ".csv"){
 } 
 # couple location info 2 results x = meetpuntenAquo; y = meetpuntenGebied; z = EKRlijst
 kopDat <- function(x , y , z){
+  #create a sample loc code
   x[,locatie := sapply(strsplit(Identificatie, '_'), `[`, 1)]
-  
-  checkloc <- x[!(x$locatie %in% y$CODE),] # check locaties die niet gekoppeld zijn aan EAG
-  if(nrow(checkloc)>1){
-    print(paste0('warning: locatie ', unique(checkloc$Identificatie), ' kan niet worden gekoppeld aan EAG'))}
-  
-  x$locatie[!(x$locatie %in% y$CODE)] <- x$Identificatie[!(x$locatie %in% y$CODE)]
   x <- unique(x[ ,c('Identificatie','HoortBijGeoobject.identificatie','Wegingsfactor','locatie')])
   x<- x[!is.na(x$Identificatie),]
-  
-  loc <- merge(y[,c('CODE','EAGIDENT','OWMIDENT','XCOORD','YCOORD')], x, by.x = 'CODE', by.y='locatie', all.x = FALSE, all.y = TRUE) 
-  loc <- loc[!is.na(loc$Identificatie),]
+  #create a sample location db
+  loc <- merge(y[,c('CODE','EAGIDENT',"OWMIDENT", 'XCOORD','YCOORD')], x, by.x = 'CODE', by.y='locatie', all.x = FALSE, all.y = FALSE) 
   
   checkloc <- z[!(z$Meetobject.lokaalID %in% loc$Identificatie),] # check locaties die niet gekoppeld zijn aan EAG
-  if(nrow(checkloc)>1){
-    print(paste0('warning: locatie ', unique(checkloc$Meetobject.lokaalID), ' komt wel voor in toetsresultaten maar niet in meetpuntbestand'))}
-  
   z <- merge(loc[,c('CODE','EAGIDENT','OWMIDENT','XCOORD','YCOORD','Identificatie','HoortBijGeoobject.identificatie')], z, by.x = 'Identificatie', by.y = 'Meetobject.lokaalID', all.x = FALSE, all.y = TRUE)
-  z <- z%>%as.data.table()
-  #toevoegen unieke ID voor geaggregeerde toetsing
-  z$HoortBijGeoobject.identificatie[is.na(z$HoortBijGeoobject.identificatie)] <- z$Identificatie[is.na(z$HoortBijGeoobject.identificatie)]
+  
+  # complement OWMIDENT 
+  z[GeoObject.code %in% unique(meetpuntenGebied$OWMIDENT[meetpuntenGebied$OWMIDENT!="" & meetpuntenGebied$OWMIDENT!="nietNodig"]), OWMIDENT := GeoObject.code]
+  # complement EAGIDENT 2 aggregated results
+  z[Identificatie %in% unique(meetpuntenGebied$EAGIDENT[meetpuntenGebied$EAGIDENT!=""]), EAGIDENT := Identificatie]
+  
+  #toevoegen unieke ID voor geaggregeerde toetsing (aggregated = without NL11 prefix = Identificatie = Meetobject.lokaalID)
+  z[is.na(z$HoortBijGeoobject.identificatie), HoortBijGeoobject.identificatie:= Identificatie] 
+  
+  # remove data which cannot be mapped 2 location, eag or owm (fish data)
+  checkloc <-  z[is.na(EAGIDENT)&is.na(OWMIDENT),]
+  if(nrow(checkloc)>1){
+    print(paste0('warning: locatie ', unique(checkloc$Identificatie), ' komt wel voor in toetsresultaten maar niet in meetpuntbestand'))}
+  z <- z[!is.na(EAGIDENT) | !is.na(OWMIDENT),]
+  
   return(z)
 }
 # pre process EKR information by adding names for filtering
@@ -67,18 +70,12 @@ ppr_ekr <- function(krwset, ovwatset, eag_wl, doelen){
   db[,c(cols):=NULL]
   db[,GHPR := gsub(' $','',GHPR)]
   
-  # complement OWMIDENT 2 aggregated results
-  db$OWMIDENT[is.na(db$OWMIDENT) & !(db$GeoObject.code  %in% 'nietNodig')] <- db$GeoObject.code[is.na(db$OWMIDENT) & !(db$GeoObject.code  %in% 'nietNodig')]
-  # complement EAGIDENT 2 aggregated results
-  db$EAGIDENT[is.na(db$EAGIDENT) & db$GeoObject.code  %in% ''] <- db$HoortBijGeoobject.identificatie[is.na(db$EAGIDENT) & db$GeoObject.code  %in% '']
   # merge EAG and KRW naam
   db <- merge(db, unique(eag_wl[,c("KRW_SGBP3","SGBP3_NAAM")]), by.x = "OWMIDENT", by.y = "KRW_SGBP3", all.x =T)
   db <- merge(db, eag_wl[,c("GAFIDENT","GAFNAAM")], by.x = "EAGIDENT", by.y = "GAFIDENT", all.x =T)
   # add naam van een toetsgebied (WL of EAG naam)
   db[,waterlichaam := fifelse(!(is.na(SGBP3_NAAM)|SGBP3_NAAM == ""), SGBP3_NAAM, GAFNAAM)]
-  # filter fish data based on deelgebieden, add merge with deelgebieden later?
-  db <- db[!(Waardebepalingsmethode.code %in% 'Maatlatten2018 Vis' & is.na(waterlichaam)),] 
-  
+   
   # make local copy (only within this function)
   doelen1 <- copy(doelen)
   # mean GEP per id (en niet per eag zoals in de doelenset staat)
@@ -98,7 +95,7 @@ ppr_ekr <- function(krwset, ovwatset, eag_wl, doelen){
 
 # calc functions -------------------------
 # calculate mean ekr score per year, calc mean score last 3 measured years, calculate oordeel (score compared 2 goals) & calculate reference score 
-tabelEKRPerWLEnEAGPerJaar <- function (EKRset, detail = "deel"){
+tabelEKRPerWLEnEAGPerJaar <- function (EKRset, detail = "deel", minjaar = 2008){
   # make local copy (only within this function)
   db <- EKRset[EKRset$jaar > 2005, ]
   
@@ -121,18 +118,18 @@ tabelEKRPerWLEnEAGPerJaar <- function (EKRset, detail = "deel"){
   # gemiddelde ekr per jaar voor draaitabel en selectie laatste 3 meetjaren
   d1 <- db[,.(EKRmean = mean(Numeriekewaarde,na.rm=T), EKRmedian = quantile(Numeriekewaarde,probs = c(0.50), na.rm=T), EKRperc90 = quantile(Numeriekewaarde,probs = c(0.90), na.rm=T), EKRperc95 = quantile(Numeriekewaarde,probs = c(0.95), na.rm=T)), by = c(colgroup,"lastyear")]
   d1$hdlprsp <- d1$EKRperc90 -d1$EKRmedian
+  d1[ ,hdlprsp.mean.over.year := mean(hdlprsp), by = c('EAGIDENT','id','watertype','GHPR_level','GHPR','wbmethode')]
   # percentielen van alle meetlocaties (zowel meetpunt als geaggr per eag of waterlichaam) in alle jaren per gebied, 2 inspect best sites
   d2 <- db[,.(EKRmean = mean(Numeriekewaarde,na.rm=T), EKRmedian = quantile(Numeriekewaarde,probs = c(0.50), na.rm=T), EKRperc90 = quantile(Numeriekewaarde,probs = c(0.90), na.rm=T), EKRperc95 = quantile(Numeriekewaarde,probs = c(0.95), na.rm=T)), by = colg]
   d2$hdlprsp.mean.all.year <- d2$EKRperc90 -d2$EKRmedian
   # draaitabel voor wide format per jaar
-  d1[ ,hdlprsp.mean.over.year := mean(hdlprsp), by = c('EAGIDENT','id','watertype','GHPR_level','GHPR','wbmethode')]
   d3 <- dcast(d1, id+EAGIDENT+watertype+GHPR_level+GHPR+wbmethode+hdlprsp.mean.over.year+lastyear ~ jaar, value.var = c("EKRmean"), fun.aggregate = mean)
   # merge per jaar en percentielen over alle jaren (die niet worden gebruikt voor handelingsperspectief)
   d3 <- merge(d2, d3, by = c('EAGIDENT','id','watertype','GHPR_level','GHPR','wbmethode'))
   
   setorder(d1,id,EAGIDENT,watertype,wbmethode,GHPR_level,-jaar)
   # add year number (given ordered set), and take only three most recent years
-  d1b <- d1[jaar > 2008, yearid := seq_len(.N),by = colg][yearid < 4]
+  d1b <- d1[jaar > minjaar, yearid := seq_len(.N),by = colg][yearid < 4]
   # calculate mean EKR per group over the three years = krw score formeel die wordt vergeleken met doel
   d1b <- d1b[,.(EKR3jr = mean(EKRmean,na.rm=T)),by = colg]
   
@@ -253,13 +250,13 @@ ppr_ekrplot_EAG <- function(ekr_score){
   names(myColors) <- levels(bg_spr$doelen)
   
   ## make plot
-  plot <- ggplot(dt, aes(x = id, y = EKR)) +
+  plot <- ggplot(dt, aes(x = id, y = EKR3jr)) +
     geom_rect(data = bg_spr, inherit.aes = FALSE,
               aes(xmin = 0, xmax = 1, ymin = ymin, ymax = ymax,
                   fill = Oordeel), alpha = 0.3) +
     scale_fill_manual(values = myColors) +
     geom_segment(aes(x = 0, xend = 1,
-                     y = EKR, yend = EKR, linetype = "Huidige toestand"),
+                     y = EKR3jr, yend = EKR3jr, linetype = "Huidige toestand"),
                  col = "black", cex = 1.4) + # linetype = 2 -> dashed
     scale_y_continuous(expand = c(0, 0), limits = c(0, 1), breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1)) +
     scale_linetype_manual("",values= c("Huidige toestand" = 1))+
@@ -318,13 +315,13 @@ ppr_ekrplot_gebied <- function(ekr_score){
   names(myColors) <- levels(bg_spr$doelen)
 
   ## make plot
-  plot <- ggplot(dt, aes(x = id, y = EKR)) +
+  plot <- ggplot(dt, aes(x = id, y = EKR3jr)) +
     geom_rect(data = bg_spr, inherit.aes = FALSE,
               aes(xmin = 0, xmax = 1, ymin = ymin, ymax = ymax,
                   fill = Oordeel), alpha = 0.3) +
     scale_fill_manual(values = myColors) +
     geom_segment(aes(x = 0, xend = 1,
-                     y = EKR, yend = EKR, linetype = "Huidige toestand"),
+                     y = EKR3jr, yend = EKR3jr, linetype = "Huidige toestand"),
                  col = "black", cex = 1.4) + # linetype = 2 -> dashed
     scale_y_continuous(expand = c(0, 0), limits = c(0, 1), breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1)) +
     scale_linetype_manual("",values= c("Huidige toestand" = 1))+
@@ -399,7 +396,7 @@ plotEKRlijnfs <- function(z, gebied = NULL){
 # fractieplots
 # 4 tab per EAG
 plotFractiePerMaatlatFacetEAG <- function(l){
-  l <- l[!is.na(l$CODE),] # geen totaal scores per toetsgeied meenemen
+  l <- l[!is.na(l$CODE),] # geen totaal scores per toetsgebied meenemen
   l<- l[is.na(l$Monster.lokaalID)|l$Monster.lokaalID == "",] # alleen scores per meetCODE per jaar
   l$GHPR_level <- as.factor(l$GHPR_level)
   l$GHPR_level <- factor(l$GHPR_level, levels = rev(levels(l$GHPR_level)))
@@ -1134,4 +1131,38 @@ ppr_dieptekaart<- function (hybi, gebieden = gEAG, gbrpAGV, kansrijk = TRUE, han
     addLegend("bottomright", colors=col, labels=labels, title = "")%>%
     addProviderTiles("Esri.WorldGrayCanvas")
   
+}
+
+
+l <- EKRlijst[EKRlijst$facet_wrap_code %in% 'Ov. waterflora',]
+l <- l[EAGIDENT == '6430-EAG-1',]
+l <- l[GHPR == '',]
+
+plotFractiePerMaatlat <- function(l){
+  l <- l[!is.na(l$CODE),] # geen totaal scores per toetsgeied meenemen
+  l$GHPR_level <- as.factor(l$GHPR_level)
+  l$GHPR_level <- factor(l$GHPR_level, levels = rev(levels(l$GHPR_level)))
+  l$klasse <- factor(l$klasse, levels = c("3", "4", "5", "6","7"), labels = c("0.8-1","0.6-0.8","0.4-0.6","0.2-0.4","0-0.2"))
+  
+  ggplot(l, aes(x = GHPR_level, fill = klasse)) +
+    geom_bar(position = "fill") +
+    scale_x_discrete(position = "left") +
+    scale_fill_manual(values= c("0.8-1"="blue","0.6-0.8"="green","0.4-0.6"="yellow","0.2-0.4"="orange","0-0.2"="red"))+
+    guides(fill=guide_legend(title='EKR score'))+
+    theme_minimal()+
+    theme(
+      strip.background = element_blank(),
+      strip.text.x = element_text(size = 7), #waardebepmethode
+      strip.text.y = element_text(size = 6), #level
+      axis.text.x = element_text(size= 6, angle=90), #jaar
+      axis.text.y = element_text(size= 7),
+      axis.ticks =  element_line(colour = "black"),
+      panel.background = element_blank(),
+      plot.background = element_blank(),
+      legend.title = element_text(size = 7),
+      legend.text  = element_text(size = 6),
+      legend.key.size = unit(0.9, "lines"),
+      legend.position = "right")+
+    #ggtitle(titel, subtitle = "Fractie meetlocaties per EKR klasse ") +
+    labs(x="",y="")
 }
