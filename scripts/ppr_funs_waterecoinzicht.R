@@ -1134,9 +1134,9 @@ ppr_dieptekaart<- function (hybi, gebieden = gEAG, gbrpAGV, kansrijk = TRUE, han
 }
 
 
-l <- EKRlijst[EKRlijst$facet_wrap_code %in% 'Ov. waterflora',]
-l <- l[EAGIDENT == '6430-EAG-1',]
-l <- l[GHPR == '',]
+# l <- EKRlijst[EKRlijst$facet_wrap_code %in% 'Ov. waterflora',]
+# l <- l[EAGIDENT == '6430-EAG-1',]
+# l <- l[GHPR == '',]
 
 plotFractiePerMaatlat <- function(l){
   l <- l[!is.na(l$CODE),] # geen totaal scores per toetsgeied meenemen

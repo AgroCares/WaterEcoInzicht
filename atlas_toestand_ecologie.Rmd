@@ -25,11 +25,6 @@ editor_options:
 ---
   
 ```{r global, include = FALSE}
-# voor hosten bij bookdown
-# LET OP KRW_SGBP3 wordt KRW_NAAM
-# Naam Ov waterflora not replaces from Ov. Waterflora 2 waterflora
-# "Warning: there are duplicate records of EKR for some areas in the data table!"
-
 #  Settings-------------------------------------------------------
 rm(list=ls())                               #maakt geheugen leeg voor aanvang
 chooseCRANmirror(graphics=FALSE, ind=1)
@@ -215,7 +210,7 @@ leaflet() %>%
 ```
 
 
-```{r verschilkaart2, fig.cap = "Verschil tussen de ecologische kwaliteit van de waterplanten aan het einde van de planperiode van SGBP2 (gebaseerd op metingen 2015 t/m 2020) en de drie meest recente meetjaren (2020 t/m 2022).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%', eval = FALSE, include=FALSE}
+```{r verschilkaart2, fig.cap = "Verschil tussen de ecologische kwaliteit van de waterplanten aan het einde van de planperiode van SGBP2 (gebaseerd op metingen 2015 t/m 2020) en de drie meest recente meetjaren (2020 t/m 2022).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%'}
 
 # difference between end wbp2 (2021 - data up 2 2020) and most recent
 wbp23 <- merge(tabsetwbp3[,c('EAGIDENT','id','GHPR_level', 'EKR3jr')], tabsetwbp2, by = c('EAGIDENT','id','GHPR_level'))
@@ -269,7 +264,7 @@ leaflet() %>%
 ```
 
 
-```{r verschilkaart3, fig.cap = "Verschil tussen de ecologische kwaliteit van waterplanten sinds de start van de monitoring (gebaseerd op metingen 2006 t/m 2013) en het einde van de planperiode van SGBP1 (gebaseerd op metingen 2006 t/m 2014).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%', eval = FALSE, include=FALSE}
+```{r verschilkaart3, fig.cap = "Verschil tussen de ecologische kwaliteit van waterplanten sinds de start van de monitoring (gebaseerd op metingen 2006 t/m 2013) en het einde van de planperiode van SGBP1 (gebaseerd op metingen 2006 t/m 2014).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%'}
 
 # difference between end wbp1 (2015 - data up 2 2014) and reference (2006-2013)
 tabsetwbp1$verschil <- tabsetwbp1$EKR3jr - tabsetwbp1$EKRref
@@ -322,7 +317,7 @@ Per maatlat en ecologisch analysegebied is daarnaast berekend hoe de ecologische
 ```{r trenddkaart, fig.cap = "Ontwikkeling in ecologische kwaliteit", echo = FALSE, message = FALSE, warning= FALSE, out.width='100%'}
 #krw<- 
 combineWidgets(
-  nrow = 2,
+  nrow = 1,
   plottrendEAG(ekrtrendeag, gEAG, maatlat = "Overige waterflora-kwaliteit"),
   plottrendEAG(ekrtrendeag, gEAG, maatlat = "Macrofauna-kwaliteit"),
   plottrendEAG(ekrtrendeag, gEAG, maatlat = "Fytoplankton-kwaliteit"),
@@ -453,7 +448,7 @@ In `r round((length(ekrtrendeag$estimate[ekrtrendeag$GHPR_level == '2V1 Overige 
 
 # krw<-
 combineWidgets(
-  ncol = 2,
+  ncol = 1,
   plottrendEAG(trendekreag, gEAG, maatlat = "Soortensamenstelling macrofyten"),
   plottrendEAG(trendekreag, gEAG,maatlat = "Soortensamenstelling macrofyten Oeverplanten"),
   plottrendEAG(trendekreag, gEAG, maatlat = "Soortensamenstelling macrofyten Waterplanten")
@@ -468,7 +463,7 @@ combineWidgets(
 
 #krw <-
 combineWidgets(
-  ncol = 2,
+  ncol = 1,
   plottrendEAG(trendekreag, gEAG, maatlat = c("Abundantie groeivormen macrofyten")),
   plottrendEAG(trendekreag, gEAG, maatlat = c('Bedekking som submerse planten en draadalgen', 'Waterdiepte')),
   plottrendEAG(trendekreag, gEAG, maatlat = c('Bedekking Emerse planten')),
@@ -649,7 +644,7 @@ plottrendEAG(trendekreag, gEAG, maatlat = "Macrofauna-kwaliteit")
 
 In afbeelding \@ref(fig:kaartenekroordeeldoelvis) staan de berkende EKR scores, doelen en de oordelen die daaruit volgen weergegeven zodat zichtbaar wordt hoe het oordeel is opgebouwd. De actuele toestand van vis is gebaseerd op metingen in meerdere jaren. Visbemonsteringen laat van nature fluctuaties zien in de tijd en een gemiddelde van verschillende jaren geeft een betrouwbaarder beeld van de ecologische toestand. In de systematiek van de KRW wordt een oordeel gegeven door dit ‘slepend gemiddelde’ van EKR scores per gebied te vergelijken met een doel.
 
-```{r kaartenekroordeeldoelvis, fig.cap = 'Overzicht van oordelen, EKR scores en doelen op de maatlat macrofauna.', echo = FALSE, message = FALSE, warning = FALSE, out.width="100%", fig.show ='hold'}
+```{r kaartenekroordeeldoelvis, fig.cap = 'Overzicht van oordelen, EKR scores en doelen op de maatlat vis.', echo = FALSE, message = FALSE, warning = FALSE, out.width="100%", fig.show ='hold'}
 # vis is niet beschikbaar per eag --> daarom projectie KRW wl op alle eags van dat waterlichaam
 ekr_scores_vis <- merge(tabset[tabset$wbmethode == "Maatlatten2018 Vis" ,], eag_wl[!eag_wl$KRW_SGBP3 == "", c('GAFIDENT','KRW_SGBP3')], by = 'KRW_SGBP3', all.y = T, allow.cartesian = T)
 ekr_scores_vis$EAGIDENT <- ekr_scores_vis$GAFIDENT
