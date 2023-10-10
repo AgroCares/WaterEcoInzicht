@@ -118,6 +118,8 @@ TWG <- dcast(EKRset, HoortBijGeoobject.identificatie+KRWwatertype.code+Waardebep
 EKRset <- left_join(EKRset, TWG) %>% as.data.table()
 EKRset$GGW <- EKRset$GNW/EKRset$.
 
+# add doelen based on facet code (4 elements) and doelentabel per EAG or krw waterbody
+
 # opslaan Rdataset --------------------------------
 saveRDS(EKRset, file= paste0(dirKRW,"EKRset",gebiedlevel,toetsjaar,".rds"))
 saveRDS(EKRlijst, file= paste0(dirKRW,"EKRlijst",gebiedlevel,toetsjaar,".rds"))

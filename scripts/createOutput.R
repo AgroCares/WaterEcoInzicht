@@ -352,6 +352,7 @@ tabelOordeelPerGebiedPerJaar <- function (b, detail = "hoofd"){
   write.table(d1, file = paste(getwd(),"/output/EKROordeelPerGebiedJaarLong",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
   return(d1)
 }
+
 # long format hoofdmtlt, meetlocatie, locatie, oordeel, ekr per jaar
 tabelOordeelPerMeetlocatiePerJaar <- function (EKRset, detail = "hoofd"){
 
@@ -549,8 +550,8 @@ draaitaxa <- function (EKRlijst1){
 vispivot <- function (EKRlijst){
 
   selKol <- c("Numeriekewaarde","Biotaxon.naam.nl","HoortBijGeoobject.identificatie","Begindatum","Resultaatdatum","HoortBijGeoObjectCode","Eenheid.code")
-  sel <- !grepl('^NL11*', EKRlijst$HoortBijGeoobject.identificatie)
-  sel <- sel & !is.na(EKRlijst$Biotaxon.naam.nl) & !EKRlijst$Biotaxon.naam.nl == "" &!(EKRlijst$Biotaxon.naam.nl %in% "Vissen")  #als geen nederlandse naam dan gaat aggregate fout. En ook niet relevant.
+  sel <- grepl('^NL11*', EKRlijst$HoortBijGeoobject.identificatie)
+  sel <- !EKRlijst$Biotaxon.naam.nl == "" #als geen nederlandse naam dan gaat aggregate fout. En ook niet relevant.
   sel <- sel & EKRlijst$Eenheid.code %in% "kg/ha"
   EKRlijst1 <- EKRlijst[sel,]
 
@@ -1755,7 +1756,7 @@ plotmafa2 <- function(mafa,TWNev){
 
 # vis
 plotvisstand <- function(hybi1){
-  #hybi11 <- hybi1[grep('NL11', hybi1$locatiecode),]
+  #hybi11 <- ekrlijst[grep('NL11', hybi1$locatiecode),]
   hybi1 <- hybi1[hybi1$eenheid == "kg/ha",]
   if(nrow(hybi1)>1){
   vissum <- dcast(hybi1, jaar+TWN.naam+WNA.nederlandse.soortnaam+locatie.EAG ~ ., sum, value.var = "meetwaarde")

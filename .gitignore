@@ -2,10 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
-data
 ekr_scores1.rds
 ekr_scores2.rds
-input
 renv
 renv.lock
 output

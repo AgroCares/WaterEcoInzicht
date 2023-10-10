@@ -1,0 +1,13 @@
+name: apptoestandkrw
+title: apptoestandkrw
+username:
+account: lauramoriawaternet
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 374422
+bundleId: 1619973
+url: https://lauramoriawaternet.shinyapps.io/apptoestandkrw/
+when: 1538563307.86978
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: scripts/loadPackages.R

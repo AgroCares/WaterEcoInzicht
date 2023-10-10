@@ -1,0 +1,13 @@
+name: test3
+title: test3
+username:
+account: lauramoriawaternet
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 371831
+bundleId: 1460705
+url: https://lauramoriawaternet.shinyapps.io/test3/
+when: 1530536579.89291
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: mainFigurenAquokit.nb.html|mainFigurenAquokit.Rmd|shinyKRW.Rmd|shinyKRW2.Rmd|output

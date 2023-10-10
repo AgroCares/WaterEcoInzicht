@@ -1,0 +1,13 @@
+name: ToestandEcologischeWaterkwaliteitv3
+title: ToestandEcologischeWaterkwaliteitv3
+username:
+account: lauramoriawaternet
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 371822
+bundleId: 1460690
+url: https://lauramoriawaternet.shinyapps.io/ToestandEcologischeWaterkwaliteitv3/
+when: 1530536059.85157
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: mainFigurenAquokit.nb.html|mainFigurenAquokit.Rmd|shinyKRW.Rmd|shinyKRW2.Rmd|output

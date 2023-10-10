@@ -80,6 +80,7 @@ ekrtrendeag <- readRDS('./data/krw/ekrtrendeag.rds')  %>% as.data.table() #allee
 ekrtrendeag$facet_wrap_code <- gsub("Ov. waterflora", "Waterflora", ekrtrendeag$facet_wrap_code)
 
 EKRlijst <- readRDS('./data/krw/EKRlijstKRW2023.rds')
+
 tabset <- readRDS('./data/krw/ekr_scores.rds') %>% as.data.table()
 tabsetwbp1 <- readRDS('./data/krw/ekr_scores_wbp1.rds') %>% as.data.table()
 tabsetwbp2 <- readRDS('./data/krw/ekr_scores_wbp2.rds') %>% as.data.table()
@@ -319,18 +320,16 @@ Per maatlat en ecologisch analysegebied is daarnaast berekend hoe de ecologische
 combineWidgets(
   nrow = 1,
   plottrendEAG(ekrtrendeag, gEAG, maatlat = "Overige waterflora-kwaliteit"),
-  plottrendEAG(ekrtrendeag, gEAG, maatlat = "Macrofauna-kwaliteit"),
+  plottrendEAG(ekrtrendeag, gEAG, maatlat = "Macrofauna-kwaliteit")
+  
+)
+
+combineWidgets(
+  nrow = 1,
   plottrendEAG(ekrtrendeag, gEAG, maatlat = "Fytoplankton-kwaliteit"),
   plottrendKRW(ekrtrend[ekrtrend$facet_wrap_code == 'Vis',], gKRW)
 )
 
-# combineWidgets(
-#     nrow = 1,
-#     plottrendEAG(ekrtrendeag20p[ekrtrendeag20p$facet_wrap_code == 'Waterflora',], gEAG),
-#     plottrendEAG(ekrtrendeag[ekrtrendeag$facet_wrap_code == 'Waterflora',], gEAG),
-#     plottrendEAG(ekrtrendeag80p[ekrtrendeag80p$facet_wrap_code == 'Waterflora',], gEAG)
-#   
-# )
 # saveWidget(krw, "trendallemaatlatten.html", selfcontained = FALSE)
 ```
 
@@ -446,25 +445,18 @@ In `r round((length(ekrtrendeag$estimate[ekrtrendeag$GHPR_level == '2V1 Overige 
 
 ```{r trendveg1, fig.cap = 'Overzicht van de trend in EKR scores op de maatlat overige waterflora per ecologisch analysegebied tussen 2006 en 2021', echo = FALSE, message = FALSE, warning = FALSE, out.width="100%", fig.show='hold'}
 
+plottrendEAG(trendekreag, gEAG, maatlat = "Soortensamenstelling macrofyten")
 # krw<-
 combineWidgets(
-  ncol = 1,
-  plottrendEAG(trendekreag, gEAG, maatlat = "Soortensamenstelling macrofyten"),
+  ncol = 2, colsize = c(1,1),
   plottrendEAG(trendekreag, gEAG,maatlat = "Soortensamenstelling macrofyten Oeverplanten"),
   plottrendEAG(trendekreag, gEAG, maatlat = "Soortensamenstelling macrofyten Waterplanten")
 )
 
-# combineWidgets(
-#     ncol = 3,
-#     plottrendEAG(trendekreag20p[trendekreag20p$GHPR_level == '2V21 Soortensamenstelling macrofyten',], gEAG),
-#     plottrendEAG(trendekreag[trendekreag$GHPR_level == '2V21 Soortensamenstelling macrofyten',], gEAG),
-#     plottrendEAG(trendekreag80p[trendekreag80p$GHPR_level == '2V21 Soortensamenstelling macrofyten',], gEAG)
-#     )
-
+plottrendEAG(trendekreag, gEAG, maatlat = c("Abundantie groeivormen macrofyten"))
 #krw <-
 combineWidgets(
-  ncol = 1,
-  plottrendEAG(trendekreag, gEAG, maatlat = c("Abundantie groeivormen macrofyten")),
+  ncol = 2, colsize = c(1,1),
   plottrendEAG(trendekreag, gEAG, maatlat = c('Bedekking som submerse planten en draadalgen', 'Waterdiepte')),
   plottrendEAG(trendekreag, gEAG, maatlat = c('Bedekking Emerse planten')),
   plottrendEAG(trendekreag, gEAG, maatlat = c("Bedekking Kroos")),
