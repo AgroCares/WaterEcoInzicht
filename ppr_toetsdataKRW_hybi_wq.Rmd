@@ -17,7 +17,7 @@ output:
 
 In dit document staat de R code waarmee KRW-toetsresultaten van hydrologische gegevens uit de Aquo-kit kunnen worden samengevoegd, verreikt met gebiedsinformatie en geaggregeerd tot scores, oordelen en trends per gebied. 
 
-Daarnaast staan er een aantal functies voor het verwerken (importeren en vertalen naar juiste format) van gegevens over hydrologie en waterkwaliteit. *Hieraan moet nog validatie worden toegevoegd tbv de website met ecologische data voor boeren.*
+Daarnaast staan er een aantal functies voor het verwerken (importeren en vertalen naar juiste format) van gegevens over hydrologie en waterkwaliteit. 
 
 De output van dit script vormt de input voor de Shiny app met KRW toetsresultaten, de overzichtsrapportage met de ecologische toestand in het beheergebied van AGV en de website waarop data wordt ontsloten. 
 
@@ -127,6 +127,10 @@ saveRDS(EKRlijst, file= paste0(dirKRW,"EKRlijst",gebiedlevel,toetsjaar,".rds"))
 
 ```
 
+## Data verwerken
+
+In onderstaande code wordt de output uit de Aquo-kit samengevegd met informatie over meetlocaties, gebieden (KRW waterlichamen en Ecologische analysegebieden) en doelstellingen.
+
 ```{r samenvoegenKRWData, include = FALSE}
 # inlezen toetsdata
 krwset <- readRDS(paste0(dirKRW,'EKRsetKRW', toetsjaar,'.rds'))
@@ -164,6 +168,10 @@ saveRDS(ekr_scores2, file= paste0(dirKRW, "ekr_scores2",".rds"))
 
 ```
 
+# Berekenen trends
+
+Per (deel)maatlat en ecologisch analysegebied is een lineaire trend in EKR-scores van alle beschikbare meetjaren bepaald. In de figuren met trends in EKR scores worden alleen trends getoond van gebieden waar voor minimaal 2 meetjaren gegevens beschikbaar zijn en waarvan de relevantie voldoende is (meer dan 0.05 ekr per 12 jaar).
+
 ```{r krwtrends}
 # bereken trend per EAG
 trendekr.eag <- trendkrw(EKRset, agglevel = 'EAG') 
@@ -182,16 +190,10 @@ saveRDS(ekrtrendeag, file = './data/krw/ekrtrendeag.rds')
 
 # Brondata hydrobiologie en waterkwaliteit
 
-```{r ppratlastoestand}
-# pre proces hybi data from FEWS
-hybi <- readRDS('../data/alles_reliable.rds')%>%as.data.table
-hybi <- ppr_hybi(db = hybi, syear = 1990, wtype = eag_wl, mlocs = locaties)
-hybi$meetwaarde <- as.numeric(hybi$meetwaarde)
-saveRDS(hybi, file = './data/hybi.rds')
+Hieronder staan een aantal functies om gegevens van hydrobiologie en waterbalansen in te laden en bewerken. NB. Moet nog worden aangevuldd
 
-# pre proces wq data
-wq <- read.csv("../wq/ImportWQ.csv", header = TRUE, na.strings = " ", sep=";", dec =".", stringsAsFactors = F)
-saveRDS(wq, "data/ImportWQ", compress = "xz")
+```{r ppr hydrobiologie}
+
 ```
 
 # Waterbalansen laden en bewerken
