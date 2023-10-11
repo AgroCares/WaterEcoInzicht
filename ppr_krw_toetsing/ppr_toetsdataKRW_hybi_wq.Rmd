@@ -69,7 +69,7 @@ saveRDS(ekrlijst, file= paste0(dirKRW, "ekrlijst",".rds"))
 
 ```
 
-## Data verwerken
+## Data KRW verwerken
 
 In onderstaande code wordt de output geaggregeerd naar gemiddelden ekr per gebied per jaar. Daarnaast worden gemiddelden bepaald van de laatste 3 meetjaren, waarbij data niet ouder mag zijn dan 11 jaar (minjaar in de functieargumenten). Deze toestandsbepaling komt overeen met de formele KRW toestandsbepaling. EKR worden vertaald naar oordelen op basis van het verschil tussen deze score en het gebiedspecifieke doel.
 
@@ -118,6 +118,9 @@ saveRDS(ekrtrend, file = '../data/krw/ekrtrend.rds')
 saveRDS(ekrtrendeag, file = '../data/krw/ekrtrendeag.rds')
 
 ```
+
+# Brondata EAGs
+
 
 # Brondata hydrobiologie en waterkwaliteit
 
