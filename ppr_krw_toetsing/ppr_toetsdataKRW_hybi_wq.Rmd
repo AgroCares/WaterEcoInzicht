@@ -2,7 +2,6 @@
 title: "Nabewerking Aquo-kit gegevens hydrobiologie voor vervolganalyse"
 subtitle: "Generen gegevens voor dashboard Gezond Water, KRW app en andere visualisaties"
 date: "`r Sys.Date()`"
-runtime: shiny
 documentclass: book
 site: bookdown::bookdown_site
 always_allow_html: yes
@@ -25,11 +24,12 @@ De output van dit script vormt de input voor de Shiny app met KRW toetsresultate
 #  Settings-------------------------------------------------------
 rm(list=ls()) #maakt geheugen leeg voor aanvang
 options(encoding = "UTF-8")
+setwd('./ppr_krw_toetsing')
 
 #  Directories and names------------------------------------------
 #  Define the year the data is created 
 toetsjaar <- "2023"
-dirKRW <- "./data/krw/"
+dirKRW <- "../data/krw/"
 
 # Load packages and functions-------------------------------------
 require(dplyr)
@@ -37,13 +37,13 @@ require(data.table)
 require(rmarkdown)
 require(broom)
 
-source('./scripts/ppr_funs_waterecoinzicht.R')
+source('../scripts/ppr_funs_waterecoinzicht.R')
 ```
 
 ```{r algemeen data}
 # load location info used in multiple chunks below
-locaties <- data.table::fread('./input/gebiedsinfo/Location.csv')
-eag_wl <- data.table::fread('./input/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv')
+locaties <- data.table::fread('../input/gebiedsinfo/Location.csv')
+eag_wl <- data.table::fread('../input/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv')
 eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
 ```
 
@@ -59,21 +59,21 @@ De inputgegevens die nodig zijn bestaan zowel uit invoergegevens die worden geï
 ```{r pprkrw, include = FALSE}
 # load input------------------------------------------------------
 # indeling maatlatten en relatie met deelmaatlatten en indicatoren
-orderMaatlatten <- fread('./input/domeinen_krw/orderMaatlatten.csv') 
+orderMaatlatten <- fread('../input/domeinen_krw/orderMaatlatten.csv') 
 orderMaatlatten$GHPR <- trimws(orderMaatlatten$GHPR)
 
 for(gebiedlevel in c("KRW","OvWater")){
 # 1. bestanden met toetsresultaten van ieder kwaliteitselement (macrofauna, macrofyten, fytoplankton en vis) 
-dirExportAquo <- paste0("./input/rapportagefiles_",gebiedlevel,toetsjaar)    
+dirExportAquo <- paste0("../input/rapportagefiles_",gebiedlevel,toetsjaar)    
 # 2. meetlocaties die zijn gebruikt bij de toetsing (input voor de Aquo-Kit)
-dirMeetpuntenAquo <- paste0("./input/meetpunteninfo_",gebiedlevel,toetsjaar)
+dirMeetpuntenAquo <- paste0("../input/meetpunteninfo_",gebiedlevel,toetsjaar)
 
 # alle resultaten uit de Aquo-kit from toetsjaar and gebied/ system bounderies (EAG or KRW)
 EKRlijst <- importAquoResult(path = dirExportAquo, pattern = ".csv") 
 # 3. basisgegevens met gebiedsindeling in Ecologische analysegebieden en de relatie tussen deze gebieden en meetlocaties. Let op dat de versie van EAG's die gebruikt worden hetzelfde is als de versie die is gebruikt voor de toestandsbepaling. De relatie EAG's meetlocaties kan ruimtelijk worden bepaald, maar het is van belang dezelfde koppeling te gebruiken als bij de toetsing.
 meetpuntenAquo <- importMeetpunten(path = dirMeetpuntenAquo)
 # load domain table 2 map locations 2 EAG
-meetpuntenGebied <- fread('./input/gebiedsinfo/meetlocaties_gebied.csv')
+meetpuntenGebied <- fread('../input/gebiedsinfo/meetlocaties_gebied.csv')
 
 # Bewerken data / proces data ---------------------------------------------------
 # convert this to a function
@@ -136,7 +136,7 @@ In onderstaande code wordt de output uit de Aquo-kit samengevegd met informatie 
 krwset <- readRDS(paste0(dirKRW,'EKRsetKRW', toetsjaar,'.rds'))
 ovwatset <- readRDS(paste0(dirKRW,'EKRsetOvWater', toetsjaar, '.rds'))
 # goals per EAG/ water body
-doelen <- data.table::fread('./input/Doelen.csv')
+doelen <- data.table::fread('../input/Doelen.csv')
 
 # add KRW doelen/ goals and addition info of waterbodies
 EKRset <- ppr_ekr(krwset = krwset, ovwatset = ovwatset, eag_wl = eag_wl, doelen = doelen) 
@@ -182,9 +182,9 @@ ekrtrend <- trendekr.eag[!(grepl('^NL11*', trendekr.eag$id)) & trendekr.eag$leve
 # alleen scores per eag op hoofdmaatlatten
 ekrtrendeag <- trendekr.eag[!is.na(trendekr.eag$EAGIDENT) & trendekr.eag$level == 1,] 
 
-saveRDS(trendekr.eag, file = './data/krw/trendekreag.rds')
-saveRDS(ekrtrend, file = './data/krw/ekrtrend.rds')
-saveRDS(ekrtrendeag, file = './data/krw/ekrtrendeag.rds')
+saveRDS(trendekr.eag, file = '../data/krw/trendekreag.rds')
+saveRDS(ekrtrend, file = '../data/krw/ekrtrend.rds')
+saveRDS(ekrtrendeag, file = '../data/krw/ekrtrendeag.rds')
 
 ```
 
@@ -200,7 +200,7 @@ Hieronder staan een aantal functies om gegevens van hydrobiologie en waterbalans
 
 ```{r}
 # laden: Rdata file die meegestuurd is
-dat <- readRDS("./data/dat.rds") # data kan worden gecreerd obv script: loadbalances
+dat <- readRDS("../data/dat.rds") # data kan worden gecreerd obv script: loadbalances
 dat[,date := as.POSIXct(paste0(jaar,"-",maand,"-01"), format = '%Y-%m-%d')]
 
 # nonogram
@@ -209,7 +209,7 @@ nomogram <- data.table::fread('../input/nomogram.csv')
 Overzicht_kP <- data.table::fread('../input/Overzicht_kP.csv')
 Overzicht_kP <- ppr_pcditch(db = Overzicht_kP)
 pvskp <- ppr_pmaps(dat, Overzicht_kp, hybi, nomogram) 
-saveRDS(pvskp, file ='./data/pvskp.rds')
+saveRDS(pvskp, file ='../data/pvskp.rds')
 ```
 
 # Write EAG as an gpkg

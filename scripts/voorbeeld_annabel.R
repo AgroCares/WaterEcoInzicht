@@ -1,3 +1,4 @@
+
 # load packages
 library(readxl)
 library(dplyr)
@@ -5,8 +6,11 @@ library(data.table)
 library(sf)
 library(leaflet)
 library(ggplot2)
+library(RColorBrewer)
 
-# read in the latest version of ESFoordelen from 'data' -------------------
+# load data -------------------
+
+# load ESFoordelen (database beheerregister)
 # set directory were ESF database is located
 dir <- './input/toestand_esf/'
 # select the latest file with ESF oordelen
@@ -27,37 +31,38 @@ ESFoordelen <- d1[!is.na(d1$OWL_SGBP3) & !d1$OWL_SGBP3 == "",]
 eag_wl <- fread('./input/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv')
 eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
 
-# read the latest version of EAGs
+# read the latest version spatial polygons EAGs
 gEAG <- st_read("./data/EAG_20220809.gpkg") %>% st_transform(4326)
 gEAG$watertype <- NULL
 
-# merge EAG en ESF oordeel
-# stap 1 is extraheren van gebiedscodes per regel in ESFoordelen
+# merge EAG en ESF oordeel ---------------------
+# step 1 extract area codes (one row = one factsheet in ESFoordelen)
 gebieden <- data.table::tstrsplit(ESFoordelen$OWL_SGBP3, split=c(','), fixed=TRUE)
 ESFoordelen <- cbind(ESFoordelen, as.data.table(gebieden))
-# stap 2 is iedere kolom vertalen naar een regelid (koppelcode)
+# step 2 transpose data format to create a format which can be merged with spatial data 
 mapdata <- melt.data.table(ESFoordelen, idvars = "OWMNAAM_SGBP3", measure.vars = colnames(ESFoordelen[,42:47]))
 mapdata <- mapdata[!is.na(value), ]
-# stap 3 is kwr waterlichaam codes en gaf codes vertalen naar EAGIDENTS
-# een waterlichaam bestaat uit meerdere EAGIDENT
+# step 3 is translate KRW waterlichaam codes en gaf codes 2 EAGIDENTS
+# 1 KRW waterbody = 1 or more EAGIDENT
 mapdata_krw <- mapdata[grepl("NL11",mapdata$value),]
 mapdata_krw <- merge(mapdata_krw, eag_wl, by.x = "value", by.y = "KRW_SGBP3", all.x = TRUE)
-# eag = eag, niets aanwijzigen
+# eag = eag
 mapdata_eag <- mapdata[grepl("EAG",mapdata$value),]
 mapdata_eag$GAFIDENT <- mapdata_eag$value
-# een gaf bestaat uit meerdere eag idents
+# 1 gaf = 1 or more EAGIDENT
 mapdata_gaf <- mapdata[!grepl("EAG",mapdata$value) & !grepl("NL11",mapdata$value),]
-# hier moet nog een regel om vegelijkbaar als bij krw waterlichamen eags te koppelen aan gafs
-# voeg mapdata samen (data van gafs mist nog)
+# add code here 2 merge gaf with eag codes
+# combine mapdata sets krw eag and gaf (code is not finished!!)
 mapdata <- rbind(mapdata_krw[,c('OWMNAAM_SGBP3','GAFIDENT')], mapdata_eag[,c('OWMNAAM_SGBP3','GAFIDENT')])
-
-# stap 4 koppel een ruimtelijk bestannd met eags met een unieke gebiedsnaam (OWMNAAM_SGBP3) die in de factsheets wordt gebruikt
+# step 4 merge spacial info EAG with EAG code from ESFoordelen (mapdata): 1 unique area name (OWMNAAM_SGBP3) = one factsheet 
 map <- merge(gEAG, mapdata, by = 'GAFIDENT', all.x = TRUE, duplicateGeoms = T)
 
 
-# maak kaart kan zowel met ggplot als met leaflet, beide voorbeelden hieronder zijn niet af 
+# maps can be made with ggplot and leaflet, 2 examples:
+# ggplot
 ggplot() +
   geom_sf(data = map, aes(fill = OWMNAAM_SGBP3), color = 'black') + 
+  scale_fill_discrete()+
    theme(panel.grid = element_blank(),
         panel.background = element_rect(fill = "#e0f3f8"),  ## azure
         axis.title.x=element_blank(),
@@ -67,12 +72,25 @@ ggplot() +
         axis.text.y=element_blank(),
         axis.ticks.y=element_blank(),
         plot.title = element_text(hjust = 0), # left-align
-        legend.position="right") 
+        legend.position="none") 
   
 
-# Hier nog een palette aan toevoegen met verschillende kleuren per gebiedsnaam (OWMNAAM_SGBP3) of unieke regel in ESFoordelen
-leaflet() %>%
-  addPolygons(data = map, layerId = map$GAFIDENT, popup= paste("EAG naam", map$GAFNAAM),
-              stroke = T, color= 'grey', opacity=0.8, weight = 0.5, smoothFactor = 0.8,
-              fill=T, fillColor = map$OWMNAAM_SGBP3, fillOpacity = 0.6) %>%
-  addProviderTiles("Esri.WorldGrayCanvas")#addTiles()
+# leaflet example show watertype per EAG
+EAG <- merge(gEAG, eag_wl, by = 'GAFIDENT',  all.x = TRUE, duplicateGeoms = T)
+EAG <- EAG[EAG$KRW_SGBP3 == "",]
+setorder(EAG,watertype)
+### Create n colors for fill
+n <- length(unique(EAG$watertype))
+mypal <- colorRampPalette(brewer.pal(9, "Paired"))(n-2)
+mypal1 <- colorRampPalette(brewer.pal(3, "Greys"))(1)
+mypal <- c(mypal,mypal1)
+pal <- colorFactor(palette = mypal,  domain = EAG$watertype)
+
+leaflet(EAG) %>%
+  addPolygons(layerId = EAG$GAFIDENT, popup= paste("naam", EAG$GAFNAAM, "<br>",
+                                                       "Ident:", EAG$GAFIDENT,"<br>",
+                                                       "watertype:", EAG$watertype),
+              stroke = T, color= ~pal(watertype) , fillColor = ~pal(watertype), opacity=0.8, weight = 1, smoothFactor = 0.8,
+              fill=T, fillOpacity = 0.6) %>%
+  addProviderTiles("Esri.WorldGrayCanvas")%>%
+  addLegend("bottomright", pal=pal, values=EAG$watertype)

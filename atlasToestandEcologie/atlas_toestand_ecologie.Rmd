@@ -42,8 +42,8 @@ library(ggplot2);library(data.table)
 library(manipulateWidget)#combineWidget
 library(htmlwidgets)#savewidget
 
-source("./scripts/fun_map_pie.R")
-source('./scripts/ppr_funs_waterecoinzicht.R')
+source("../scripts/fun_map_pie.R")
+source('../scripts/ppr_funs_waterecoinzicht.R')
 
 # other settings
 col <- c('3'="blue",'4'="green",'5'="yellow",'6'="orange",'7'="red")
@@ -54,47 +54,47 @@ labels <- c('3'="0.8-1",'4'="0.6-0.8",'5'="0.4-0.6",'6'="0.2-0.4",'7'="0-0.2")
 ```{r data, include = FALSE}
 
 ## data voor kaart ----------
-gEAG <- st_read("./data/EAG_20220809.gpkg") %>% st_transform(4326)
+gEAG <- st_read("../data/EAG_20220809.gpkg") %>% st_transform(4326)
 gEAG$watertype <- NULL
-EAG <- st_read("./data/EAG_20220809.gpkg") %>% st_transform(28992)
-gKRW <- st_read("./data/WBPKRW20200525.gpkg")%>% st_transform(4326)
-KRW <- st_read("./data/WBPKRW20200525.gpkg")%>% st_transform(28992)
+EAG <- st_read("../data/EAG_20220809.gpkg") %>% st_transform(28992)
+gKRW <- st_read("../data/WBPKRW20200525.gpkg")%>% st_transform(4326)
+KRW <- st_read("../data/WBPKRW20200525.gpkg")%>% st_transform(28992)
 ## aanvullende eag data, krwwatertype niet overal ingevuld en stedelijk landelijk voor EST
 ## let op: als nieuwe EAG (gEAG) dan deze tabel aanpassen en aanvullen
-eag_wl <- fread('./input/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv')
+eag_wl <- fread('../input/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv')
 eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
 
 # domain TWN codes, addiotional information on taxa
-TWNev <- read_excel('./input/TwnList_2019-07-19.xlsx')
+TWNev <- read_excel('../input/TwnList_2019-07-19.xlsx')
 
 # data hybi
-hybi <- readRDS('./data/hybi.rds') %>% as.data.table()
+hybi <- readRDS('../data/hybi.rds') %>% as.data.table()
 
 # KRW toetsgegevens
-EKRset <- readRDS('./data/krw/EKRset.rds') %>% as.data.table()
-trendekreag <- readRDS('./data/krw/trendekreag.rds')  %>% as.data.table() #alle trends per EAG
+EKRset <- readRDS('../data/krw/EKRset.rds') %>% as.data.table()
+trendekreag <- readRDS('../data/krw/trendekreag.rds')  %>% as.data.table() #alle trends per EAG
 trendekreag$facet_wrap_code <- gsub("Ov. waterflora", "Waterflora", trendekreag$facet_wrap_code)
-ekrtrend <- readRDS('./data/krw/ekrtrend.rds') %>% as.data.table() #alleen hoofd, gewogen (dus niet per meetlocatie)
+ekrtrend <- readRDS('../data/krw/ekrtrend.rds') %>% as.data.table() #alleen hoofd, gewogen (dus niet per meetlocatie)
 ekrtrend$facet_wrap_code <- gsub("Ov. waterflora", "Waterflora", ekrtrend$facet_wrap_code)
-ekrtrendeag <- readRDS('./data/krw/ekrtrendeag.rds')  %>% as.data.table() #alleen hoofdmaatlat
+ekrtrendeag <- readRDS('../data/krw/ekrtrendeag.rds')  %>% as.data.table() #alleen hoofdmaatlat
 ekrtrendeag$facet_wrap_code <- gsub("Ov. waterflora", "Waterflora", ekrtrendeag$facet_wrap_code)
 
-EKRlijst <- readRDS('./data/krw/EKRlijstKRW2023.rds')
+EKRlijst <- readRDS('../data/krw/EKRlijstKRW2023.rds')
 
-tabset <- readRDS('./data/krw/ekr_scores.rds') %>% as.data.table()
-tabsetwbp1 <- readRDS('./data/krw/ekr_scores_wbp1.rds') %>% as.data.table()
-tabsetwbp2 <- readRDS('./data/krw/ekr_scores_wbp2.rds') %>% as.data.table()
-tabsetwbp3 <- readRDS('./data/krw/ekr_scores_wbp3.rds') %>% as.data.table()
+tabset <- readRDS('../data/krw/ekr_scores.rds') %>% as.data.table()
+tabsetwbp1 <- readRDS('../data/krw/ekr_scores_wbp1.rds') %>% as.data.table()
+tabsetwbp2 <- readRDS('../data/krw/ekr_scores_wbp2.rds') %>% as.data.table()
+tabsetwbp3 <- readRDS('../data/krw/ekr_scores_wbp3.rds') %>% as.data.table()
 
 # aggregated waterbody scores
-ekr_scores1 <- readRDS('./data/krw/ekr_scores1.rds') %>% as.data.table()
-ekr_scores2 <- readRDS('./data/krw/ekr_scores2.rds') %>% as.data.table()
+ekr_scores1 <- readRDS('../data/krw/ekr_scores1.rds') %>% as.data.table()
+ekr_scores2 <- readRDS('../data/krw/ekr_scores2.rds') %>% as.data.table()
 
 # data water quality
-wq <- readRDS('./data/wq.rds') %>% as.data.table()
+wq <- readRDS('../data/wq.rds') %>% as.data.table()
 
 # data P loads
-pvskp <- readRDS('./data/pvskp.rds') %>% as.data.table()
+pvskp <- readRDS('../data/pvskp.rds') %>% as.data.table()
 
 ```
 
