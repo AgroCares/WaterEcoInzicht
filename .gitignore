@@ -2,13 +2,11 @@
 .Rhistory
 .RData
 .Ruserdata
-ekr_scores1.rds
-ekr_scores2.rds
+data
 rsconnect
 renv
 renv.lock
 output
-EKRset.rds
 atlas_toestand_ecologie/assets
 atlas_toestand_ecologie.html
 atlas_toestand_ecologie_files
