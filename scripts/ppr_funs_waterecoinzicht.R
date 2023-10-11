@@ -1,101 +1,116 @@
 # Laura Moria - juni 2023
 
-# postprocess functions to combine output Aquo-kit and aggregate data ----------------
-# importeer alle uitvoerbestanden met toetsresultaten uit de Aquo-Kit
-importAquoResult <- function(path = dirExportAquo, pattern = ".csv"){
-  lijst <- list.files(path= path, pattern=pattern, full.names =  T)
-  classes <- sapply(fread(lijst[2L], sep=';'), class)
-  EKRlijst <- lapply(lijst, fread, sep=';', colClasses = unlist(classes))
-  EKRlijst <- rbindlist(EKRlijst, fill =T, use.names = T)
-  return(EKRlijst)
-}    
-# import all sample locations (import files aquo kit)
-importMeetpunten <- function(path = dirMeetpuntenAquo, pattern = ".csv"){
-  lijst <- as.list(list.files(path= path, pattern=pattern, full.names =T))
-  meetpunten <- lapply(lijst, function(i) fread(i))
-  loc <- rbindlist(meetpunten, fill =T, use.names =T)
-  return(loc)
-} 
-# couple location info 2 results x = meetpuntenAquo; y = meetpuntenGebied; z = EKRlijst
-kopDat <- function(x , y , z){
-  #create a sample loc code
-  x[,locatie := sapply(strsplit(Identificatie, '_'), `[`, 1)]
-  x <- unique(x[ ,c('Identificatie','HoortBijGeoobject.identificatie','Wegingsfactor','locatie')])
-  x<- x[!is.na(x$Identificatie),]
-  #create a sample location db
-  loc <- merge(y[,c('CODE','EAGIDENT',"OWMIDENT", 'XCOORD','YCOORD')], x, by.x = 'CODE', by.y='locatie', all.x = FALSE, all.y = FALSE) 
+# postprocess functions to combine output Aquo-kit and info on EAG's ----------------
+importKRW <- function(inputdir = "../input/20230803/", eag_wl, orderMaatlatten) {
   
-  checkloc <- z[!(z$Meetobject.lokaalID %in% loc$Identificatie),] # check locaties die niet gekoppeld zijn aan EAG
-  z <- merge(loc[,c('CODE','EAGIDENT','OWMIDENT','XCOORD','YCOORD','Identificatie','HoortBijGeoobject.identificatie')], z, by.x = 'Identificatie', by.y = 'Meetobject.lokaalID', all.x = FALSE, all.y = TRUE)
+  for(gebiedlevel in c("KRW","OvWater")){
+    
+    # alle resultaten uit de Aquo-kit from toetsjaar and gebied/ system bounderies (EAG or KRW)
+    EKRlijst <- list.files(path= paste0(inputdir,"rapportagefiles"), pattern=".csv", full.names =  T)
+    classes <- sapply(fread(EKRlijst[2L], sep=';'), class)
+    EKRlijst <- lapply(EKRlijst, fread, sep=';', colClasses = unlist(classes))
+    EKRlijst <- rbindlist(EKRlijst, fill =T, use.names = T)
+    
+    # 3. basisgegevens met gebiedsindeling in Ecologische analysegebieden en de relatie tussen deze gebieden en meetlocaties. Let op dat de versie van EAG's die gebruikt worden hetzelfde is als de versie die is gebruikt voor de toestandsbepaling. De relatie EAG's meetlocaties kan ruimtelijk worden bepaald, maar het is van belang dezelfde koppeling te gebruiken als bij de toetsing.
+    meetpuntenAquo <-  as.list(list.files(path= paste0(inputdir, "/meetpunteninfo"), pattern = ".csv", full.names =T))
+    meetpuntenAquo <- lapply(meetpuntenAquo, function(i) fread(i))
+    meetpuntenAquo <- rbindlist( meetpuntenAquo, fill =T, use.names =T)
+    
+    # load domain table 2 map locations 2 EAG
+    meetpuntenGebied <- fread(paste0(inputdir, "/gebiedsinfo/meetlocaties_gebied.csv"))
+    
+    # Bewerken data / proces data ---------------------------------------------------
+    # convert this to a function
+    EKRlijst$klasse <- as.factor(EKRlijst$Classificatie)
+    # add location info (EAG) to results
+    EKRlijst <- kopDat(meetpuntenAquo, meetpuntenGebied, EKRlijst)
+    NA -> EKRlijst$EAGIDENT[EKRlijst$EAGIDENT == ""]
+    # add year
+    EKRlijst$jaar<- format(EKRlijst$Begindatum, '%Y')
+    EKRlijst$jaar<- as.numeric(EKRlijst$jaar)
+    
+    # make unique parameter/ waarneming
+    EKRlijst$GHPR <- paste(ifelse(is.na(EKRlijst$Grootheid.omschrijving)|EKRlijst$Grootheid.omschrijving == '', EKRlijst$Typering.Omschrijving,EKRlijst$Grootheid.omschrijving),ifelse(is.na(EKRlijst$Parameter.omschrijving)|EKRlijst$Parameter.omschrijving == '',"",EKRlijst$Parameter.omschrijving))
+    EKRlijst$GHPR <- trimws(EKRlijst$GHPR)
+    
+    #couple parameter 2 leveld parameter legend
+    # check <- unique(EKRlijst$GHPR[!(EKRlijst$GHPR %in% unique(orderMaatlatten$GHPR))])
+    EKRlijst <- merge(EKRlijst, orderMaatlatten[, c('GHPR','level','GHPR_level')], by = 'GHPR', all.x = TRUE)
+    
+    # merge EAG and KRW naam
+    EKRlijst <- merge(EKRlijst, unique(eag_wl[,c("KRW_SGBP3","SGBP3_NAAM")]), by.x = "OWMIDENT", by.y = "KRW_SGBP3", all.x =T)
+    EKRlijst <- merge(EKRlijst, eag_wl[,c("GAFIDENT","GAFNAAM")], by.x = "EAGIDENT", by.y = "GAFIDENT", all.x =T)
+    # add naam van een toetsgebied (WL of EAG naam)
+    EKRlijst[,waterlichaam := fifelse(!(is.na(SGBP3_NAAM)|SGBP3_NAAM == ""), SGBP3_NAAM, GAFNAAM)]
+    EKRlijst[,waterlichaam_code := fifelse(!(is.na(OWMIDENT)|OWMIDENT == ""), OWMIDENT, EAGIDENT)]
+    
+    # namen aanpassen
+    EKRlijst[,facet_wrap_code := as.factor(gsub("other:Aquo-kit;Bio-toetsing;KRWmaatlat2018 - ","",Waardebepalingsmethode.code))]
+    EKRlijst[facet_wrap_code == 'other:Aquo-kit;OW-toetsing;tussenresultaat;SOM',facet_wrap_code := sapply(strsplit(Parameter.code, '_'), `[`, 1)]
+    
+    # opslaan Rdataset --------------------------------
+    return(EKRlijst)
+    
+  }
+}
+
+kopDat <- function(meetpuntenAquo , meetpuntenGebied , EKRlijst){
+  #create a sample loc code
+  meetpuntenAquo[,locatie := sapply(strsplit(Identificatie, '_'), `[`, 1)]
+  meetpuntenAquo <- unique(meetpuntenAquo[ ,c('Identificatie','HoortBijGeoobject.identificatie','Wegingsfactor','locatie')])
+  meetpuntenAquo<- meetpuntenAquo[!is.na(meetpuntenAquo$Identificatie),]
+  #create a sample location db
+  loc <- merge(meetpuntenGebied[,c('CODE','EAGIDENT',"OWMIDENT", 'XCOORD','YCOORD')], meetpuntenAquo, by.x = 'CODE', by.y='locatie', all.x = FALSE, all.y = FALSE) 
+  
+  checkloc <- EKRlijst[!(EKRlijst$Meetobject.lokaalID %in% loc$Identificatie),] # check locaties die niet gekoppeld zijn aan EAG
+  EKRlijst <- merge(loc[,c('CODE','EAGIDENT','OWMIDENT','XCOORD','YCOORD','Identificatie','HoortBijGeoobject.identificatie')], EKRlijst, by.x = 'Identificatie', by.y = 'Meetobject.lokaalID', all.x = FALSE, all.y = TRUE)
   
   # complement OWMIDENT 
-  z[GeoObject.code %in% unique(meetpuntenGebied$OWMIDENT[meetpuntenGebied$OWMIDENT!="" & meetpuntenGebied$OWMIDENT!="nietNodig"]), OWMIDENT := GeoObject.code]
+  EKRlijst[GeoObject.code %in% unique(meetpuntenGebied$OWMIDENT[meetpuntenGebied$OWMIDENT!="" & meetpuntenGebied$OWMIDENT!="nietNodig"]), OWMIDENT := GeoObject.code]
   # complement EAGIDENT 2 aggregated results
-  z[Identificatie %in% unique(meetpuntenGebied$EAGIDENT[meetpuntenGebied$EAGIDENT!=""]), EAGIDENT := Identificatie]
+  EKRlijst[Identificatie %in% unique(meetpuntenGebied$EAGIDENT[meetpuntenGebied$EAGIDENT!=""]), EAGIDENT := Identificatie]
   
   #toevoegen unieke ID voor geaggregeerde toetsing (aggregated = without NL11 prefix = Identificatie = Meetobject.lokaalID)
-  z[is.na(z$HoortBijGeoobject.identificatie), HoortBijGeoobject.identificatie:= Identificatie] 
+  EKRlijst[is.na(EKRlijst$HoortBijGeoobject.identificatie), HoortBijGeoobject.identificatie:= Identificatie] 
   
   # remove data which cannot be mapped 2 location, eag or owm (fish data)
-  checkloc <-  z[is.na(EAGIDENT)&is.na(OWMIDENT),]
+  checkloc <-  EKRlijst[is.na(EAGIDENT)&is.na(OWMIDENT),]
   if(nrow(checkloc)>1){
     print(paste0('warning: locatie ', unique(checkloc$Identificatie), ' komt wel voor in toetsresultaten maar niet in meetpuntbestand'))}
-  z <- z[!is.na(EAGIDENT) | !is.na(OWMIDENT),]
+  EKRlijst <- EKRlijst[!is.na(EAGIDENT) | !is.na(OWMIDENT),]
   
-  return(z)
+  return(EKRlijst)
 }
-# pre process EKR information by adding names for filtering
-ppr_ekr <- function(krwset, ovwatset, eag_wl, doelen){
 
+# pre process EKR information by adding names for filtering
+ppr_ekr <- function(db, doelen){
+  
   # combine both EKR from KRW and overig water into one data.table
-  db <- data.table::rbindlist(list(krwset,ovwatset), fill=TRUE)
   db$jaar <- as.numeric(db$jaar) 
- 
+  
   # delte rows without information, rijen weg zonder informatie
   db <- db[!is.na(db$Numeriekewaarde),]
-
+  
   # remove columns without information
   cols <- colnames(db)[unlist(db[,lapply(.SD,function(x) sum(is.na(x))==nrow(db))])]
   db[,c(cols):= NULL]
-
-  # remove some columns based on judgement Gerard
-  cols <- c('MEETNET_HISTORIE','REFERENTIEVLAK','GLOBALID','GN_CREATED_USER','GN_CREATED_DATE',
-            'GN_LAST_EDITED_USER','GN_LAST_EDITED_DATE','MEETNET_ACTUEEL','FEWSFILTER_HISTORIE',
-            'FEWSFILTER_ACTUEEL','PROGRAMMA_HISTORIE','PROGRAMMA_ACTUEEL','.',
-            'LigtInGeoObjectCode','ï..Meetobject.namespace','CAS.nummer',
-            'Begintijd','Eindtijd','Doel','bronddoel',"HandelingsperspectiefWBP",'KRWwatertype.code.y')
-  # ensure that cols are present in colnames db
-  cols <- cols[cols %in% colnames(db)]
-  # remove columns
-  db[,c(cols):=NULL]
+  
+  # trim spaces
   db[,GHPR := gsub(' $','',GHPR)]
   
-  # merge EAG and KRW naam
-  db <- merge(db, unique(eag_wl[,c("KRW_SGBP3","SGBP3_NAAM")]), by.x = "OWMIDENT", by.y = "KRW_SGBP3", all.x =T)
-  db <- merge(db, eag_wl[,c("GAFIDENT","GAFNAAM")], by.x = "EAGIDENT", by.y = "GAFIDENT", all.x =T)
-  # add naam van een toetsgebied (WL of EAG naam)
-  db[,waterlichaam := fifelse(!(is.na(SGBP3_NAAM)|SGBP3_NAAM == ""), SGBP3_NAAM, GAFNAAM)]
-   
-  # make local copy (only within this function)
-  doelen1 <- copy(doelen)
-  # mean GEP per id (en niet per eag zoals in de doelenset staat)
-  doelgeb <- doelen1[,.(GEP = mean(Doel,na.rm=TRUE), GEP_2022 = mean(Doel_2022,na.rm=TRUE)), by =.(HoortBijGeoobject.identificatie, brondoel_2022, GHPR)]
-  # make copy, add new id where NL11_ is removed
-  doelgeb2 <- copy(doelgeb)
-  doelgeb2$HoortBijGeoobject.identificatie <- gsub("^NL11_*","",doelgeb2$HoortBijGeoobject.identificatie)
-  doelgeb <- rbind(doelgeb,doelgeb2)
-  # merge with doelen
-  db <- merge(db, doelgeb, by.x = c('HoortBijGeoobject.identificatie','GHPR'), by.y = c('HoortBijGeoobject.identificatie','GHPR'), all.x = TRUE)
-
-  # namen aanpassen
-  db[,facet_wrap_code := as.factor(gsub("Maatlatten2018 ","",Waardebepalingsmethode.code))]
-
+  # mean GEP per id  
+  doelgeb <- doelen[,.(GEP_2022 = mean(Doel_2022,na.rm=TRUE)), by =.(GeoObject.code, gebied, brondoel_2022, GHPR, Waardebepalingsmethode)]
+  doelgeb[, waterlichaam_code := fifelse(!(is.na(GeoObject.code)|GeoObject.code == ""), GeoObject.code, gebied)]
+  
+  # merge with doelen & db
+  db <- merge(db, doelgeb[,c('waterlichaam_code','Waardebepalingsmethode','GEP_2022')], by.x = c('waterlichaam_code','facet_wrap_code'), by.y = c('waterlichaam_code','Waardebepalingsmethode'), all.x = TRUE)
+  
   return(db)
 }
 
 # calc functions -------------------------
 # calculate mean ekr score per year, calc mean score last 3 measured years, calculate oordeel (score compared 2 goals) & calculate reference score 
-tabelEKRPerWLEnEAGPerJaar <- function (EKRset, detail = "deel", minjaar = 2008){
+tabelEKRPerWLEnEAGPerJaar <- function (EKRset, detail = "deel", minjaar = 2008, outdir = "../output"){
   # make local copy (only within this function)
   db <- EKRset[EKRset$jaar > 2005, ]
   
@@ -104,15 +119,15 @@ tabelEKRPerWLEnEAGPerJaar <- function (EKRset, detail = "deel", minjaar = 2008){
   
   # col group per jaar
   colgroup <-c('HoortBijGeoobject.identificatie','EAGIDENT','KRWwatertype.code','Waardebepalingsmethode.code',
-               'facet_wrap_code','GHPR_level','GHPR','level','jaar','GEP','GEP_2022','waterlichaam','OWMIDENT')
+               'facet_wrap_code','GHPR_level','GHPR','level','jaar','GEP_2022','waterlichaam','OWMIDENT')
   # rename columns and order data.table
   setnames(db,colgroup,c('id','EAGIDENT','watertype','wbmethode','facet_wrap_code','GHPR_level',
-                         'GHPR','level','jaar','GEP','GEP_2022','waterlichaam','KRW_SGBP3'))
+                         'GHPR','level','jaar','GEP_2022','waterlichaam','KRW_SGBP3'))
   # columns to group with year
   colgroup <- c('id','EAGIDENT','watertype','wbmethode','facet_wrap_code','GHPR_level',
-                'GHPR','level','jaar','GEP','GEP_2022','waterlichaam','KRW_SGBP3')
+                'GHPR','level','jaar','GEP_2022','waterlichaam','KRW_SGBP3')
   # columns to group alle meetpunten over de jaren
-  colg <- c('EAGIDENT','id','watertype','GHPR_level','GHPR','level','wbmethode','facet_wrap_code', 'GEP', 'GEP_2022', 'waterlichaam', 'KRW_SGBP3')
+  colg <- c('EAGIDENT','id','watertype','GHPR_level','GHPR','level','wbmethode','facet_wrap_code', 'GEP_2022', 'waterlichaam', 'KRW_SGBP3')
   db <- db[,lastyear := max(jaar),by = colg]
   
   # gemiddelde ekr per jaar voor draaitabel en selectie laatste 3 meetjaren
@@ -141,14 +156,8 @@ tabelEKRPerWLEnEAGPerJaar <- function (EKRset, detail = "deel", minjaar = 2008){
   d1a <- d1a[,.(EKRref = mean(EKRmean,na.rm=T)),by = colg]
   
   # merge per jaar en percentielen
-  d3 <- merge(d1b, d3, by = c('EAGIDENT','id','watertype','GHPR_level','GHPR','level','wbmethode','facet_wrap_code','GEP','GEP_2022','waterlichaam','KRW_SGBP3'), all.y = TRUE)
-  d3 <- merge(d1a, d3, by = c('EAGIDENT','id','watertype','GHPR_level','GHPR','level','wbmethode','facet_wrap_code','GEP','GEP_2022','waterlichaam','KRW_SGBP3'), all.y = TRUE)
-  
-  # add classification for GEP (goals WBP 1+2)
-  d3[EKR3jr < GEP/3,oordeel := 'slecht']
-  d3[EKR3jr >= GEP/3 & EKR3jr < 2 * GEP / 3,oordeel := 'ontoereikend']
-  d3[EKR3jr >= 2 * GEP / 3,oordeel := 'matig']
-  d3[EKR3jr >= GEP, oordeel := 'goed']
+  d3 <- merge(d1b, d3, by = c('EAGIDENT','id','watertype','GHPR_level','GHPR','level','wbmethode','facet_wrap_code','GEP_2022','waterlichaam','KRW_SGBP3'), all.y = TRUE)
+  d3 <- merge(d1a, d3, by = c('EAGIDENT','id','watertype','GHPR_level','GHPR','level','wbmethode','facet_wrap_code','GEP_2022','waterlichaam','KRW_SGBP3'), all.y = TRUE)
   
   # add classification for GEP 2022 (goals WBP3)
   d3[EKR3jr < GEP_2022/3,oordeel_2022 := 'slecht']
@@ -177,7 +186,7 @@ tabelEKRPerWLEnEAGPerJaar <- function (EKRset, detail = "deel", minjaar = 2008){
   d3 <- d3[wbmethode =="Maatlatten2018 Ov. waterflora" &
                              level == 3 & !(GHPR %in% c('Bedekking Grote drijfbladplanten','Bedekking Kruidlaag')), minscore := EKR3jr==min(EKR3jr,na.rm=T), by = c('id','EAGIDENT','facet_wrap_code','level')] 
   
-  write.table(d3, file = paste(getwd(),"/output/EKROordeelPerGebiedJaarWide",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
+  write.table(d3, file = paste(outdir,"/EKROordeelPerGebiedJaarWide",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
   return(d3)
 }
 # calculate trends EKR scores over time 
@@ -186,8 +195,8 @@ trendkrw <- function(EKRset, agglevel = 'EAG'){
   EKRset$jaarlm <- as.numeric(EKRset$jaar-2006)
   # add last year when measures were executed
   # columns to group alle meetpunten over de jaren
-  if(agglevel == 'EAG'){colg <- c('EAGIDENT','HoortBijGeoobject.identificatie','KRWwatertype.code','GHPR_level','facet_wrap_code', 'GEP', 'GEP_2022', 'waterlichaam', 'SGBP3_NAAM')}
-  if(agglevel == 'KRW'){colg <- c('HoortBijGeoobject.identificatie','KRWwatertype.code','GHPR_level','facet_wrap_code', 'GEP', 'GEP_2022', 'waterlichaam', 'SGBP3_NAAM')}
+  if(agglevel == 'EAG'){colg <- c('EAGIDENT','HoortBijGeoobject.identificatie','KRWwatertype.code','GHPR_level','facet_wrap_code', 'GEP_2022', 'waterlichaam', 'SGBP3_NAAM')}
+  if(agglevel == 'KRW'){colg <- c('HoortBijGeoobject.identificatie','KRWwatertype.code','GHPR_level','facet_wrap_code', 'GEP_2022', 'waterlichaam', 'SGBP3_NAAM')}
   
   EKRset <- EKRset[,lastyear := max(jaar), by = colg]
   

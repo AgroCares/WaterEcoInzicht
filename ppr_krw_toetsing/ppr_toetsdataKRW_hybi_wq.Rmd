@@ -22,14 +22,13 @@ De output van dit script vormt de input voor de Shiny app met KRW toetsresultate
 
 ```{r settings, echo = FALSE, message= FALSE, include = FALSE}
 #  Settings-------------------------------------------------------
-rm(list=ls()) #maakt geheugen leeg voor aanvang
 options(encoding = "UTF-8")
-setwd('./ppr_krw_toetsing')
 
 #  Directories and names------------------------------------------
 #  Define the year the data is created 
 toetsjaar <- "2023"
 dirKRW <- "../data/krw/"
+if(!dir.exists(dirKRW)){dir.create("../data/krw/")}
 
 # Load packages and functions-------------------------------------
 require(dplyr)
@@ -42,8 +41,8 @@ source('../scripts/ppr_funs_waterecoinzicht.R')
 
 ```{r algemeen data}
 # load location info used in multiple chunks below
-locaties <- data.table::fread('../input/gebiedsinfo/Location.csv')
-eag_wl <- data.table::fread('../input/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv')
+locaties <- data.table::fread('../input/20230803/gebiedsinfo/Location.csv')
+eag_wl <- data.table::fread('../input/20230803/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv')
 eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
 ```
 
@@ -61,97 +60,29 @@ De inputgegevens die nodig zijn bestaan zowel uit invoergegevens die worden geï
 # indeling maatlatten en relatie met deelmaatlatten en indicatoren
 orderMaatlatten <- fread('../input/domeinen_krw/orderMaatlatten.csv') 
 orderMaatlatten$GHPR <- trimws(orderMaatlatten$GHPR)
-
-for(gebiedlevel in c("KRW","OvWater")){
-# 1. bestanden met toetsresultaten van ieder kwaliteitselement (macrofauna, macrofyten, fytoplankton en vis) 
-dirExportAquo <- paste0("../input/rapportagefiles_",gebiedlevel,toetsjaar)    
-# 2. meetlocaties die zijn gebruikt bij de toetsing (input voor de Aquo-Kit)
-dirMeetpuntenAquo <- paste0("../input/meetpunteninfo_",gebiedlevel,toetsjaar)
-
-# alle resultaten uit de Aquo-kit from toetsjaar and gebied/ system bounderies (EAG or KRW)
-EKRlijst <- importAquoResult(path = dirExportAquo, pattern = ".csv") 
-# 3. basisgegevens met gebiedsindeling in Ecologische analysegebieden en de relatie tussen deze gebieden en meetlocaties. Let op dat de versie van EAG's die gebruikt worden hetzelfde is als de versie die is gebruikt voor de toestandsbepaling. De relatie EAG's meetlocaties kan ruimtelijk worden bepaald, maar het is van belang dezelfde koppeling te gebruiken als bij de toetsing.
-meetpuntenAquo <- importMeetpunten(path = dirMeetpuntenAquo)
-# load domain table 2 map locations 2 EAG
-meetpuntenGebied <- fread('../input/gebiedsinfo/meetlocaties_gebied.csv')
-
-# Bewerken data / proces data ---------------------------------------------------
-# convert this to a function
-EKRlijst$klasse <- as.factor(EKRlijst$Classificatie)
-# add location info (EAG) to results
-EKRlijst <- kopDat(meetpuntenAquo, meetpuntenGebied, EKRlijst)
-NA -> EKRlijst$EAGIDENT[EKRlijst$EAGIDENT == ""]
-# change names for readability
-EKRlijst$Waardebepalingsmethode.code <- gsub('other:Aquo-kit;Bio-toetsing;KRWmaatlat2012 -' , 'Maatlatten2012', EKRlijst$Waardebepalingsmethode.code)
-EKRlijst$Waardebepalingsmethode.code <- gsub('other:Aquo-kit;Bio-toetsing;KRWmaatlat2018 -' , 'Maatlatten2018', EKRlijst$Waardebepalingsmethode.code)
-# add year
-EKRlijst$jaar<- format(EKRlijst$Begindatum, '%Y')
-EKRlijst$jaar<- as.numeric(EKRlijst$jaar)
-
-# make unique parameter/ waarneming
-EKRlijst$GHPR <- paste(ifelse(is.na(EKRlijst$Grootheid.omschrijving)|EKRlijst$Grootheid.omschrijving == '', EKRlijst$Typering.Omschrijving,EKRlijst$Grootheid.omschrijving),ifelse(is.na(EKRlijst$Parameter.omschrijving)|EKRlijst$Parameter.omschrijving == '',"",EKRlijst$Parameter.omschrijving))
-EKRlijst$GHPR <- trimws(EKRlijst$GHPR)
-#couple parameter 2 leveld parameter legend
-# check <- unique(EKRlijst$GHPR[!(EKRlijst$GHPR %in% unique(orderMaatlatten$GHPR))])
-EKRlijst <- merge(EKRlijst, orderMaatlatten[, c('GHPR','level','GHPR_level')], by = 'GHPR', all.x = TRUE)
-
-# Create subset 4 plots ---------------------------------------
-# select only EKR scores and not the input data
-EKRset<- EKRlijst[EKRlijst$Hoedanigheid.code == 'EKR', ]
-
-# add a factor for EKR scores
-'7' -> EKRset$klasse[EKRset$Numeriekewaarde < 0.2]
-'6' -> EKRset$klasse[EKRset$Numeriekewaarde >= 0.2 & EKRset$Numeriekewaarde < 0.4]
-'5' -> EKRset$klasse[EKRset$Numeriekewaarde >= 0.4 & EKRset$Numeriekewaarde < 0.6]
-'4' -> EKRset$klasse[EKRset$Numeriekewaarde >= 0.6 & EKRset$Numeriekewaarde < 0.8]
-'3' -> EKRset$klasse[EKRset$Numeriekewaarde >= 0.8]
-EKRset$klasse <- as.factor(EKRset$klasse)
-EKRset<- EKRset[!EKRset$Grootheid.code %in% c("CONCTTE"),]
-EKRset$XCOORD <- as.integer(EKRset$XCOORD)
-EKRset$YCOORD <- as.integer(EKRset$YCOORD)
-
-# gewogen gemiddelden per waterlichaam -----------------------------------------------
-# convert this into a function
-EKRset$GNW <- EKRset$Numeriekewaarde*EKRset$Wegingsfactor
-TWG <- dcast(EKRset, HoortBijGeoobject.identificatie+KRWwatertype.code+Waardebepalingsmethode.code+GHPR
-             +jaar ~., value.var = "Wegingsfactor", fun.aggregate = sum, na.rm =TRUE)
-EKRset <- left_join(EKRset, TWG) %>% as.data.table()
-EKRset$GGW <- EKRset$GNW/EKRset$.
-
-# add doelen based on facet code (4 elements) and doelentabel per EAG or krw waterbody
-
-# opslaan Rdataset --------------------------------
-saveRDS(EKRset, file= paste0(dirKRW,"EKRset",gebiedlevel,toetsjaar,".rds"))
-saveRDS(EKRlijst, file= paste0(dirKRW,"EKRlijst",gebiedlevel,toetsjaar,".rds"))
-}
+ekrlijst <- importKRW(inputdir = "../input/20230803/", eag_wl, orderMaatlatten)
+# goals per EAG/ water body
+doelen <- data.table::fread('../input/Doelen.csv')
+# add KRW doelen/ goals of waterbodies
+ekrlijst <- ppr_ekr(ekrlijst, doelen = doelen) 
+saveRDS(ekrlijst, file= paste0(dirKRW, "ekrlijst",".rds"))
 
 ```
 
 ## Data verwerken
 
-In onderstaande code wordt de output uit de Aquo-kit samengevegd met informatie over meetlocaties, gebieden (KRW waterlichamen en Ecologische analysegebieden) en doelstellingen.
+In onderstaande code wordt de output geaggregeerd naar gemiddelden ekr per gebied per jaar. Daarnaast worden gemiddelden bepaald van de laatste 3 meetjaren, waarbij data niet ouder mag zijn dan 11 jaar (minjaar in de functieargumenten). Deze toestandsbepaling komt overeen met de formele KRW toestandsbepaling. EKR worden vertaald naar oordelen op basis van het verschil tussen deze score en het gebiedspecifieke doel.
 
-```{r samenvoegenKRWData, include = FALSE}
-# inlezen toetsdata
-krwset <- readRDS(paste0(dirKRW,'EKRsetKRW', toetsjaar,'.rds'))
-ovwatset <- readRDS(paste0(dirKRW,'EKRsetOvWater', toetsjaar, '.rds'))
-# goals per EAG/ water body
-doelen <- data.table::fread('../input/Doelen.csv')
-
-# add KRW doelen/ goals and addition info of waterbodies
-EKRset <- ppr_ekr(krwset = krwset, ovwatset = ovwatset, eag_wl = eag_wl, doelen = doelen) 
-saveRDS(EKRset, file= paste0(dirKRW, "EKRset",".rds"))
-EKRset2 <- NULL
-
+```{r aggregate data, include = FALSE}
 ## calculate EKR scores per year, average of the last 3 years from EKRset
 # Actueel = LAATSTE 3 beschikbare meetjaren in periode 2011 tm 2021 (meeste recente beschikbare gegevens)
 # Referentietoestand = de EERSTE 3 beschikbare meetjaren in de periode 2006 tm 2013 (gelijk aan referentie voor overige wateren)
-ekr_scores <- tabelEKRPerWLEnEAGPerJaar(EKRset, detail = "deel", minjaar = 2012)
+ekr_scores <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR',], detail = "deel", minjaar = 2012)
 # Einde planperiode 1 = LAATSTE 3 beschikbare meetjaren in periode 2003 tm 2014 (gelijk aan Toestand 2015 factsheets in WKP*) -2009tm2015
-ekr_scores_wbp1 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2005 & EKRset$jaar < 2015,], detail = "deel", minjaar = 2004)
+ekr_scores_wbp1 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2005 & jaar < 2015,], detail = "deel", minjaar = 2004)
 # Einde planperiode 2 = LAATSET 3 beschikbare meetjaren in periode 2010 tm 2020 (gelijk aan Toestand 2021 factsheets in WKP*) -2016tm2021
-ekr_scores_wbp2 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2014 & EKRset$jaar < 2021,], detail = "deel", minjaar = 2010)
-ekr_scores_wbp3 <- tabelEKRPerWLEnEAGPerJaar(EKRset[EKRset$jaar > 2019 & EKRset$jaar < 2027,], detail = "deel", minjaar = 2012)
+ekr_scores_wbp2 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2014 & jaar < 2021,], detail = "deel", minjaar = 2010)
+ekr_scores_wbp3 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2019 & jaar < 2027,], detail = "deel", minjaar = 2012)
 
 # aggregated waterbody scores for app and atlas toestand
 ekr_scores1 <- ekr_scores[!grepl("^NL11_*",id), ] # alleen gewogen scores selecteren
@@ -174,8 +105,8 @@ Per (deel)maatlat en ecologisch analysegebied is een lineaire trend in EKR-score
 
 ```{r krwtrends}
 # bereken trend per EAG
-trendekr.eag <- trendkrw(EKRset, agglevel = 'EAG') 
-trendekr.eag <- merge(ekr_scores, trendekr.eag[,-c('lastyear','GEP')], by = c('id','EAGIDENT','facet_wrap_code', 'GHPR_level','watertype', "GEP_2022","waterlichaam"))
+trendekr.eag <- trendkrw(ekrlijst[Hoedanigheid.code == 'EKR',], agglevel = 'EAG') 
+trendekr.eag <- merge(ekr_scores, trendekr.eag[,-c('lastyear')], by = c('id','EAGIDENT','facet_wrap_code', 'GHPR_level','watertype', "GEP_2022","waterlichaam"))
 
 # select only aggregated scores per waterbody/ toetsgebied - trends are calculated based on total average scores per waterbody, NB. individual samples are not used for trends
 ekrtrend <- trendekr.eag[!(grepl('^NL11*', trendekr.eag$id)) & trendekr.eag$level == 1,] 
@@ -202,7 +133,6 @@ Hieronder staan een aantal functies om gegevens van hydrobiologie en waterbalans
 # laden: Rdata file die meegestuurd is
 dat <- readRDS("../data/dat.rds") # data kan worden gecreerd obv script: loadbalances
 dat[,date := as.POSIXct(paste0(jaar,"-",maand,"-01"), format = '%Y-%m-%d')]
-
 # nonogram
 nomogram <- data.table::fread('../input/nomogram.csv')
 # datafile with P-load PC Ditch
