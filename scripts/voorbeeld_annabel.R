@@ -28,17 +28,18 @@ d1[,OWL_SGBP3 := lapply(.SD, function(x) gsub(" ", "", x)),.SDcols = "OWL_SGBP3"
 ESFoordelen <- d1[!is.na(d1$OWL_SGBP3) & !d1$OWL_SGBP3 == "",]
 
 ## aanvullende eag data
-eag_wl <- fread('./input/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv')
+eag_wl <- fread('./input/20230803/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv')
 eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
 
 # read the latest version spatial polygons EAGs
-gEAG <- st_read("./data/EAG_20220809.gpkg") %>% st_transform(4326)
+gEAG <- st_read("./data/EAG.gpkg") %>% st_transform(4326)
 gEAG$watertype <- NULL
 
 # merge EAG en ESF oordeel ---------------------
 # step 1 extract area codes (one row = one factsheet in ESFoordelen)
 gebieden <- data.table::tstrsplit(ESFoordelen$OWL_SGBP3, split=c(','), fixed=TRUE)
 ESFoordelen <- cbind(ESFoordelen, as.data.table(gebieden))
+ESFoordelen[, id := 1:nrow(ESFoordelen)]
 # step 2 transpose data format to create a format which can be merged with spatial data 
 mapdata <- melt.data.table(ESFoordelen, idvars = "OWMNAAM_SGBP3", measure.vars = colnames(ESFoordelen[,42:47]))
 mapdata <- mapdata[!is.na(value), ]

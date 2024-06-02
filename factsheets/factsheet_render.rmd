@@ -1,0 +1,159 @@
+# factsheet rendering
+# authors: Laura Moria, Sven Verweij en Gerard Ros
+
+```{r}
+# clear environment
+rm(list=ls())
+
+# Load packages and functions -------------------------------------
+require(rmarkdown);require(flexdashboard)
+require(knitr);require(kableExtra)
+require(dplyr) ;require(stringr)
+# load required packages for these factsheetppr
+require(sf);require(data.table)
+require(magrittr);require(ggplot2)
+require(plotly)
+require(grid)
+require(gridExtra)
+
+# add functions
+source('./scripts/import_data.R')
+source('./scripts/funs_factsheet.R')
+
+# settings ------------
+workspace <- '20230803'
+
+```
+
+```{r load data}
+# load timeseries data (which is preprocessed in ppr_toetsdataKRW_hybi_wq) -----------
+# hydrobiologische gegevens
+hybi <- readRDS('./data/hybi.rds') %>% as.data.table()
+# wq data
+wq <- readRDS('./data/fychem.rds') %>% as.data.table()
+# slootbodem measurements
+bod <- readRDS("./data/bodchem.rds") %>% as.data.table()
+# select only measurements from sediment surface
+bod <- bod[compartiment %in% c('SB','PW'),]
+bod <- bod[parameterid %in% c("Fe_mg_kg_dg","Fe_mg_l","Fe_mg_l_nf","Fe_mg_l_ng","Ptot_gP_kg_dg","Ptot_mgP_l","Ptot_mgP_l_nf","Ptot_mgP_l_ng","SO4_mg_l_nf","Stot_mgS_kg_dg","Stot_mgS_l_nf","Stot_mgS_l_ng")]
+
+# waterbalans data (made by loadBalances function)
+dat <- readRDS("./data/dat.rds")
+dat[,date := as.POSIXct(paste0(jaar,"-",maand,"-01"), format = '%Y-%m-%d')]
+# aggregated waterbalance with critcal loads 
+pvskp <- readRDS("./data/pvskp.rds")
+# load KRW toetsgegevens
+ekrlijst <- readRDS('./data/krw/ekrlijst.rds') %>% as.data.table()
+EKRset <- ekrlijst[Hoedanigheid.code == 'EKR',]
+ekr_scores <- readRDS("./data/krw/ekr_scores.rds")
+# load trend ekr per eag
+trendfychem <- readRDS('./data/trendfychem.rds')
+# load dis current state ecology
+toestandbeschrijving_eag <- readRDS('./data/eagtoestandbeschrijving.rds')
+# load trend NP
+ekrtrendbeschrijving <- readRDS('./data/krw/ekrtrendbeschrijving.rds')
+
+eag_wl <- data.table::fread(paste0('./input/', workspace, '/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv'))
+eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
+eag_wl$EAGIDENT <- eag_wl$GAFIDENT
+eag_wl$GAFIDENT <- sapply(strsplit(eag_wl$EAGIDENT, '-'), `[`, 1)
+
+# read in the latest version of ESFoordelen from 'data'
+ESFoordelen <- ppr_esf_oordeel(dir = './input/toestand_esf/', eag_wl, ekrtrendbeschrijving, trendfychem, toestandbeschrijving_eag)
+
+# informatie over maatregelen
+maatregelen <- ppr_maatregelen(dir = './input/maatregelen/')
+maatregelen <- maatregelen[!maatregelen$SGBPPeriode.omschrijving %in% c('Niet uitvoeren','Niet opnemen in SGBP3', "niet opnemen in SGBP3"),]
+
+# geographic files for mapping -------------
+# shape met alle EAGs
+EAG <- st_read("./data/EAG.gpkg") %>% st_transform(28992)
+EAG$watertype <- NULL
+# shape met al het water in EAG
+waterpereag <- sf::st_read(paste0('./input/',workspace, '/gebiedsinfo/WaterPerEAG20191205.gpkg'),quiet = T) %>% sf::st_transform(28992)
+# shape met waterschapsgebied
+waterschappen  <- sf::st_read(paste0('./input/',workspace, '/gebiedsinfo/2019_gemeentegrenzen_kustlijn_simplified.shp'),quiet = T) %>%sf::st_transform(28992)
+
+# data voor EST tekening ----------------------
+# dit bestand moet af en toe geupdate obv nieuwe hybi en EAG data
+EST <- readRDS('./data/estloc.rds')
+# koppeltabel om de juiste tekening te kunnen koppelen
+EST_kt <- data.table::fread('./input/EST_koppeltabel.csv', encoding = "Latin-1")
+EST_kt[,estnaam := lapply(estnaam, function(x) gsub("^\\s+|\\s+$", "", x))]
+
+
+# watertypen beschrijving
+watertypen <- data.table::fread('./input/KRWWatertype.csv')
+
+# make one object with all data
+brondata <- list(ESFoordelen = ESFoordelen,
+                   EKRset = EKRset,
+                   ekr_scores = ekr_scores,
+                   eag_wl = eag_wl,
+                   pvskp = pvskp,
+                   wq = wq,
+                   hybi = hybi,
+                   bod = bod,
+                   gEAG = EAG,
+                   waterpereag1 = waterpereag,
+                   waterschappen = waterschappen,
+                   watertypen = watertypen,
+                   EST = EST,
+                   EST_kt = EST_kt,
+                   maatregelen = maatregelen)
+```
+
+```{r render factsheets}
+# run for all files
+
+for(eagnr in c(1:nrow
+               (brondata$ESFoordelen))){#5, 13, 32 : nrow(brondata$ESFoordelen)){ 
+
+  # voor debug attach(brondata) detach(brondata)
+  
+  # collect the data for that specific water body / EAG / GAF
+  out = factsheetExtract(i=eagnr, brondata = brondata, splot = TRUE)
+  if(identical(out$wlname, character(0)) |nrow(out$d3)== 0|!is.character(out$ESTnaam)){next}
+  
+  # #render the html flexdashboard
+  outputF <- "html"
+  
+  # output voor domeinen, K3: naam met EAG_ en KRWIDENT_
+  titel <- paste(out$eagwl$EAGIDENT, collapse = "_")
+  if(any(!out$eagwl$KRW_SGBP3 == "")){
+  titel2 <- paste(out$waterlichamenwl$OWL_SGBP3, collapse = '_')
+  titel <- paste(titel2, titel, sep = '_', collapse = '_')}
+  titel <- gsub(", ","_",titel)
+  titel <- gsub(",","_",titel)
+  rmarkdown::render(input = "factsheets/factsheets_html.Rmd",
+                    output_format = "flexdashboard::flex_dashboard", 
+                    output_file = paste("FS_", titel, ".html", sep=''),
+                    output_dir = "factsheets/output/")
+  webshot::webshot(paste("factsheets/output/FS_", titel, ".html", sep=''),
+                   file = paste("factsheets/output/FS_", titel, ".png", sep=''), vwidth = 2000, delay = 1)
+  
+  # saveRDS(readLines(con = "factsheets/factsheets_html.Rmd")[132:208],"factsheets/maatregelsheets_html.Rmd")
+  # rmarkdown::render(input = "factsheets/maatregelsheets_html.Rmd",
+  #                   output_format = "flexdashboard::flex_dashboard", 
+  #                   output_yaml = "",
+  #                   output_file = paste("MS_", titel, ".html", sep=''),
+  #                   output_dir = "factsheets/output/")
+  # webshot::webshot(paste("factsheets/output/MS_", titel, ".html", sep=''),
+  #                  file = paste("factsheets/output/MS_", titel, ".png", sep=''), vwidth = 2000, delay = 1)
+
+}
+
+
+# outputF <- "word"
+# rmarkdown::render(input = "factsheets/factsheets_html.Rmd", #of rmd of script
+#                   output_format = "bookdown::word_document2", 
+#                   output_file = paste("FS_", titel, ".docx", sep=''),
+#                   output_dir = "output/")
+# rmarkdown::render(input = "factsheets/factsheets_html.Rmd", #of rmd of script
+#                   output_format = "bookdown::pdf_document2", 
+#                   output_file = paste("FS_", titel, ".docx", sep=''),
+#                   output_dir = "output/")
+```
+
+
+
