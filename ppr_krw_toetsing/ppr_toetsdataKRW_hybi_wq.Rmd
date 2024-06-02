@@ -26,8 +26,8 @@ options(encoding = "UTF-8")
 
 #  Directories and names------------------------------------------
 #  Define the year the data is created 
-toetsjaar <- "2023"
-dirKRW <- "../data/krw/"
+snapshot <- "20240527"
+dirKRW <- "./data/krw/"
 if(!dir.exists(dirKRW)){dir.create("../data/krw/")}
 
 # Load packages and functions-------------------------------------
@@ -35,15 +35,30 @@ require(dplyr)
 require(data.table)
 require(rmarkdown)
 require(broom)
+require(sf)
+require(readxl)
+require(R.utils)
 
-source('../scripts/ppr_funs_waterecoinzicht.R')
+source('./scripts/ppr_funs_waterecoinzicht.R')
+source('./scripts/import_data.R')
 ```
 
 ```{r algemeen data}
 # load location info used in multiple chunks below
-locaties <- data.table::fread('../input/20230803/gebiedsinfo/Location.csv')
-eag_wl <- data.table::fread('../input/20230803/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv')
+locaties <- data.table::fread(paste0('./input/', snapshot, '/gebiedsinfo/Location.csv'))
+
+eag_wl <- data.table::fread(paste0('./input/', snapshot, '/gebiedsinfo/EAG_Opp_kenmerken_03042024.csv'))
 eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
+eag_wl$EAGIDENT <- eag_wl$GAFIDENT
+eag_wl$GAFIDENT <- sapply(strsplit(eag_wl$EAGIDENT, '-'), `[`, 1)
+biotaxon <- data.table::fread(paste0('./input/', snapshot, '/biotaxon.csv'), fill = TRUE)
+parameter <- data.table::fread(paste0('./input/', snapshot, '/parameterid.csv'), fill = TRUE)
+
+# merge location with eag table for waterbody and watertype (as long as location is not updated automatically)
+locaties <- merge(locaties, eag_wl[,c('EAGIDENT','GAFNAAM','KRW_SGBP3','watertype')], by.x = 'EAGIDENT', by.y = 'EAGIDENT', all.x = TRUE)
+locaties[,OWMIDENT := NULL]
+# add GAF/ aan afvoergebied code (it is not correct in the table)
+locaties$GAFIDENT <- sapply(strsplit(locaties$EAGIDENT, '-'), `[`, 1)
 ```
 
 # KRW data
@@ -58,18 +73,151 @@ De inputgegevens die nodig zijn bestaan zowel uit invoergegevens die worden geï
 ```{r pprkrw, include = FALSE}
 # load input------------------------------------------------------
 # indeling maatlatten en relatie met deelmaatlatten en indicatoren
-orderMaatlatten <- fread('../input/domeinen_krw/orderMaatlatten.csv') 
+orderMaatlatten <- fread('./input/domeinen_krw/orderMaatlatten.csv', encoding = "Latin-1") 
 orderMaatlatten$GHPR <- trimws(orderMaatlatten$GHPR)
-ekrlijst <- importKRW(inputdir = "../input/20230803/", eag_wl, orderMaatlatten)
+ekrlijst <- importKRW(inputdir = paste0("./input/", snapshot,"/rapportagefiles"), locaties = locaties, eag_wl, orderMaatlatten)
 # goals per EAG/ water body
-doelen <- data.table::fread('../input/Doelen.csv')
+doelen <- data.table::fread(paste0("./input/", snapshot,'/Doelen.csv'))
 # add KRW doelen/ goals of waterbodies
 ekrlijst <- ppr_ekr(ekrlijst, doelen = doelen) 
-saveRDS(ekrlijst, file= paste0(dirKRW, "ekrlijst",".rds"))
+
+#validate ekrdata
+krw_val <- val_ekrlijst(ekrlijst)
+#remove data which is incomplete (not all EAGs within water body, too little samples)
+ekrlijst <- ekrlijst[!(KRW_SGBP3 == 'NL11_2_5' & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2008','2009','2011')),]
+ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_2_9','NL11_5_5') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2009')),]
+ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_6_1') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2010')),]
+ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_6_10') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2006','2015','2022')),]
+ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_6_11') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2007')),]
+ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_6_2') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2022')),]
+ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_6_6') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2015')),]
+# Kievitsbuurt 2006 en 2010 mist
+# SAP, 3201-EAG-2 mist tm 2012: mogelijk omdat er alleen OW en geen EZ locaties zijn? 
+
+saveRDS(ekrlijst, file= paste0("./data/krw/ekrlijst",".rds"))
+
+EKRset <- ekrlijst[Hoedanigheid.code == 'EKR',]
 
 ```
 
-## Data KRW verwerken
+# Brondata EAGs
+
+```{r}
+# Preprocess EAG data -----------------------------------------------------
+# Load base layer with EAGs 
+EAG <- st_read(paste0('./input/20230803/gebiedsinfo/EAG_20220809.shp')) %>% st_transform(28992)
+setnames(EAG,c("Code" ,"Naam","Soort","Oppervlakt","Omschrijvi" ,"Opmerking" , "Wtype_BR"  , "Wtype_WBP",  "geometry"),
+         c("EAGIDENT" ,"EAGNAAM","Soort", "EAGOPPVL", "OSMOMSCH" ,"OPMERKINGE" , "OWMTYPE"  , "OWMTYPE_WBP",  "geometry"))
+EAG <- setDT(EAG)
+# add GAF/ aan afvoergebied code
+EAG[,GAFIDENT:= sapply(strsplit(EAG$EAGIDENT, '-'), `[`, 1)]
+EAG[,GAFNAAM := sapply(strsplit(EAG$EAGNAAM, ','), `[`, 1)]
+# correct gaf names with ',' in their name, this should be corrected in input data
+EAG[GAFIDENT == '3070', GAFNAAM := 'Holland, Sticht, Voorburg en Polder het Honderd oost']
+EAG[EAGIDENT == '3070-EAG-2', EAGNAAM := 'deelgebied 2']
+EAG[EAGIDENT == '3070-EAG-1', EAGNAAM := 'Voorburg']
+EAG[GAFIDENT == '7000', GAFNAAM := 'IJmeer, Markermeer, Gooimeer en Eemmeer']
+EAG[GAFIDENT == '6000', GAFNAAM := 'Noordzeekanaal, IJ, Amsterdamrijnkanaalboezem']
+EAG[GAFIDENT == '8000', GAFNAAM := 'Rijnlands Boezem']
+EAG[EAGIDENT == '7000-EAG-1', EAGNAAM := 'IJmeer']
+EAG[EAGIDENT == '7000-EAG-2', EAGNAAM := 'Diemerzeedijk']
+EAG[EAGIDENT == '7000-EAG-3', EAGNAAM := 'deelgebied 3']
+EAG[EAGIDENT == '7000-EAG-3', EAGNAAM := 'deelgebied 4']
+# remove unclear names
+EAG[,EAGNAAM := gsub(", Nog opknippen in  EAG's", "", EAGNAAM)]
+EAG[,EAGNAAM := trimws(EAG$EAGNAAM, whitespace = ",", which = 'right')]
+# remove gafname
+EAG[,EAGNAAM := sapply(strsplit(EAG$EAGNAAM, ','), `[`, 2)]
+EAG[,EAGNAAM := gsub("^\\s+|\\s+$", "", EAGNAAM)]
+# add unique names
+EAG[,unique.eag := uniqueN(EAGIDENT), by = 'GAFIDENT']
+EAG[,unique.eag.nm := uniqueN(EAGNAAM), by = 'GAFIDENT']
+EAG[,EAGNAAM2 := sapply(strsplit(EAGIDENT, '-'), `[`, 3)]
+EAG[!unique.eag == unique.eag.nm| is.na(EAGNAAM), EAGNAAM := paste0('Deelgebied ',EAGNAAM2)]
+# correct different gafs, with same name, this should be corrected in input data
+EAG[GAFIDENT == '6110', GAFNAAM := 'Noorder IJpolder 2']
+EAG[, EAGNAAM := capitalize(EAGNAAM)]
+#correct names on request Waternet
+EAG[GAFIDENT == '2540', GAFNAAM := 'Polder Groot Mijdrecht']
+EAG[, EAGNAAM := gsub("Staatsbosbheer", "Staatsbosbeheer", EAGNAAM, fixed = TRUE)]
+EAG[, EAGNAAM := gsub("Staatbosbheer", "Staatsbosbeheer", EAGNAAM, fixed = TRUE)]
+# add trimmed gafname for folders
+EAG[, GAFNAAM_trim := gsub(" ", "", GAFNAAM, fixed = TRUE)]
+EAG<- EAG[!GAFNAAM == 'Geen EAG',]
+EAG<- EAG[!GAFNAAM == '3???',]
+EAG <- st_as_sf(EAG) %>% st_transform(28992)
+st_write(EAG, paste0('./data/', '/EAG.gpkg'), append = FALSE)
+setDT(EAG)
+
+#check if all EAGs in locaties are in EAG
+checkEAG <- locaties[!EAGIDENT %in% unique(EAG$EAGIDENT),]
+#check if all EAGs in EAG are in locatie
+checkEAG_loc <- EAG[!EAGIDENT %in% unique(locaties$EAGIDENT),]
+#check if all EAGs in locaties are in EAG
+checkEAG <- eag_wl[!EAGIDENT %in% unique(EAG$EAGIDENT),]
+#check if all EAGs in locaties are in EAG
+checkEAG <- EAG[!EAGIDENT %in% unique(eag_wl$EAGIDENT),]
+```
+
+
+# Brondata hydrobiologie en waterkwaliteit
+
+Hieronder staan een aantal functies om gegevens van hydrobiologie en fysisch chemische waterkwaliteit in te laden en bewerken. 
+
+```{r ppr hydrobiologie}
+# hybi data import
+hybi <- import_wqdata(path = paste0('./input/', snapshot, '/hybi/'), location = locaties, parameter = parameter, pattern = ".csv")
+
+# post process chemical data (take only relevant categories, which differs for each type of analysis) 4 use in atlas_toestand
+hybi <- ppr_wqdata(hybi, syear = 1900, srow= c("HYBIO","IONEN","NUTRI","ALG","VELD","ALGEN","LICHT","MONSVAR","METAL","NUTRI_KRWTOETS","ALG_KRWTOETS","ALGEN_KRWTOETS","HYBIO_KRWTOETS","KRWTOETS","IONEN_KRWTOETST", "VELD_KRWTOETST"))
+hybi <- hybi[!meetwaarde == -999,]
+
+# data pre processing-------------------------------------------------------
+# merge with taxoninfo
+hybi <- hybi[,grep('TWN ', colnames(hybi)):= NULL]
+hybi <- merge(hybi, biotaxon[,-c('datum','geslacht','levensvorm')], by.x = 'biotaxonnaam', by.y = 'code', all.x = TRUE)
+setnames(hybi, c("biotaxonnaam","naam"),c("biotaxonnaam_oud","biotaxonnaam"))
+
+# write hybi.rds
+saveRDS(hybi, file = './data/hybi.rds')
+# readRDS('./data/hybi.rds')
+```
+
+```{r impor fychem}
+#import chemical data
+fychem <- import_wqdata(path = paste0('./input/', snapshot, '/fychem/'), location = locaties, parameter = parameter)
+# post process chemical data (take only relevant categories, which differs for each type of analysis) 4 use in atlas_toestand
+fychem <- ppr_wqdata(fychem, syear = 1900, srow = c("HYBIO","IONEN","NUTRI","ALG","VELD","ALGEN","LICHT","MONSVAR","METAL","NUTRI_KRWTOETS","ALG_KRWTOETS","ALGEN_KRWTOETS","HYBIO_KRWTOETS","KRWTOETS","IONEN_KRWTOETST", "VELD_KRWTOETST"))
+fychem  <- fychem[!meetwaarde == -999,]
+fychem[parameterid == "Ntot_mgN_l_nf", parameterid:= "Ntot_mgN_l"]
+# write hybi.rds
+saveRDS(fychem, file = './data/fychem.rds')
+```
+
+```{r impor bodchem}
+#import chemical data
+bodchem <- import_wqdata(path = paste0('./input/', snapshot, '/bodemchemie/'), location = locaties, parameter = parameter)
+duplicate_bod <- bodchem[duplicated(bodchem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","datum","biotaxonnaam","limietsymbool","meetwaarde","afronding")),]
+
+# post process chemical data
+bodchem <- ppr_wqdata(bodchem, syear = 1900, srow = c("IONEN","NUTRI","ALG","VELD","ALGEN","LICHT","MONSVAR","METAL","NUTRI_KRWTOETS","ALG_KRWTOETS","IONEN_KRWTOETS"))
+bodchem  <- bodchem[!meetwaarde == -999,]
+# write bodchem.rds
+saveRDS(bodchem, file = './data/bodchem.rds')
+```
+
+# Overzicht data Hybi
+
+```{r}
+hybi_val <- val_hybi(hybi)
+write.table(hybi_val, file = paste("./output/valhybi",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
+
+hybi_val2 <- val_hybi2(hybi)
+write.table(hybi_val, file = paste("./output/valhybi",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
+```
+
+
+# Data KRW verwerken
 
 In onderstaande code wordt de output geaggregeerd naar gemiddelden ekr per gebied per jaar. Daarnaast worden gemiddelden bepaald van de laatste 3 meetjaren, waarbij data niet ouder mag zijn dan 11 jaar (minjaar in de functieargumenten). Deze toestandsbepaling komt overeen met de formele KRW toestandsbepaling. EKR worden vertaald naar oordelen op basis van het verschil tussen deze score en het gebiedspecifieke doel.
 
@@ -77,17 +225,17 @@ In onderstaande code wordt de output geaggregeerd naar gemiddelden ekr per gebie
 ## calculate EKR scores per year, average of the last 3 years from EKRset
 # Actueel = LAATSTE 3 beschikbare meetjaren in periode 2011 tm 2021 (meeste recente beschikbare gegevens)
 # Referentietoestand = de EERSTE 3 beschikbare meetjaren in de periode 2006 tm 2013 (gelijk aan referentie voor overige wateren)
-ekr_scores <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR',], detail = "deel", minjaar = 2012)
+ekr_scores <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR',], detail = "deel", minjaar = 2012, outdir = "./output")
 # Einde planperiode 1 = LAATSTE 3 beschikbare meetjaren in periode 2003 tm 2014 (gelijk aan Toestand 2015 factsheets in WKP*) -2009tm2015
-ekr_scores_wbp1 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2005 & jaar < 2015,], detail = "deel", minjaar = 2004)
+ekr_scores_wbp1 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2005 & jaar < 2015,], detail = "deel", minjaar = 2004, outdir = "./output")
 # Einde planperiode 2 = LAATSET 3 beschikbare meetjaren in periode 2010 tm 2020 (gelijk aan Toestand 2021 factsheets in WKP*) -2016tm2021
-ekr_scores_wbp2 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2014 & jaar < 2021,], detail = "deel", minjaar = 2010)
-ekr_scores_wbp3 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2019 & jaar < 2027,], detail = "deel", minjaar = 2012)
+ekr_scores_wbp2 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2014 & jaar < 2021,], detail = "deel", minjaar = 2010, outdir = "./output")
+ekr_scores_wbp3 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2019 & jaar < 2027,], detail = "deel", minjaar = 2012, outdir = "./output")
 
 # aggregated waterbody scores for app and atlas toestand
-ekr_scores1 <- ekr_scores[!grepl("^NL11_*",id), ] # alleen gewogen scores selecteren
+ekr_scores1 <- ekr_scores[aggregated == 'ja', ] # alleen gewogen scores selecteren
 # non aggregated scores for tab per EAG for app and atlas toestand
-ekr_scores2 <- ekr_scores[grepl("^NL11_*",id), ] # alleen ongewogen scores selecteren
+ekr_scores2 <- ekr_scores[aggregated == 'nee', ] # alleen ongewogen scores selecteren
 
 # save subsets
 saveRDS(ekr_scores, file= paste0(dirKRW, "ekr_scores",".rds"))
@@ -101,51 +249,185 @@ saveRDS(ekr_scores2, file= paste0(dirKRW, "ekr_scores2",".rds"))
 
 # Berekenen trends
 
-Per (deel)maatlat en ecologisch analysegebied is een lineaire trend in EKR-scores van alle beschikbare meetjaren bepaald. In de figuren met trends in EKR scores worden alleen trends getoond van gebieden waar voor minimaal 2 meetjaren gegevens beschikbaar zijn en waarvan de relevantie voldoende is (meer dan 0.05 ekr per 12 jaar).
+Per (deel)maatlat en ecologisch analysegebied is een lineaire trend in EKR-scores van alle beschikbare meetjaren bepaald. In de figuren met trends in EKR scores worden alleen trends getoond van gebieden waar voor minimaal 2 meetjaren gegevens beschikbaar zijn en waarvan de relevantie (meer dan 0.05 ekr per 6 jaar) en significantie (p waarde > 0.1) voldoende is.
 
 ```{r krwtrends}
 # bereken trend per EAG
-trendekr.eag <- trendkrw(ekrlijst[Hoedanigheid.code == 'EKR',], agglevel = 'EAG') 
-trendekr.eag <- merge(ekr_scores, trendekr.eag[,-c('lastyear')], by = c('id','EAGIDENT','facet_wrap_code', 'GHPR_level','watertype', "GEP_2022","waterlichaam"))
-
+trendekr.eag <- trendkrw(ekrlijst[Hoedanigheid.code == 'EKR',]) 
+trendekr.eag <- merge(ekr_scores, trendekr.eag, by = c('EAGIDENT','KRW_SGBP3',"waterlichaam",'KRWwatertype.code','aggregated','facet_wrap_code','GHPR', 'level' ,'GHPR_level', "GEP_2022"))
+write.table(trendekr.eag, file = paste("./output/trendekr.eag",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
 # select only aggregated scores per waterbody/ toetsgebied - trends are calculated based on total average scores per waterbody, NB. individual samples are not used for trends
-ekrtrend <- trendekr.eag[!(grepl('^NL11*', trendekr.eag$id)) & trendekr.eag$level == 1,] 
+ekrtrend <- trendekr.eag[aggregated == 'ja' & level == 1,] 
 # alleen scores per eag op hoofdmaatlatten
-ekrtrendeag <- trendekr.eag[!is.na(trendekr.eag$EAGIDENT) & trendekr.eag$level == 1,] 
+ekrtrendeag <- trendekr.eag[!is.na(EAGIDENT) & level == 1,] 
 
-saveRDS(trendekr.eag, file = '../data/krw/trendekreag.rds')
-saveRDS(ekrtrend, file = '../data/krw/ekrtrend.rds')
-saveRDS(ekrtrendeag, file = '../data/krw/ekrtrendeag.rds')
+saveRDS(trendekr.eag, file = './data/krw/trendekreag.rds')
+saveRDS(ekrtrend, file = './data/krw/ekrtrend.rds')
+saveRDS(ekrtrendeag, file = './data/krw/ekrtrendeag.rds')
+
+ekrtrendbeschrijving <- beschrijvingtrend(ekrtrendeag)
+saveRDS(ekrtrendbeschrijving, file = './data/krw/ekrtrendbeschrijving.rds')
 
 ```
 
-# Brondata EAGs
+```{r chemietrends}
+fychem_vast <- fychem[grepl("*VMplassen*|*VMboezem*|*VMgemalen*", FEWSFILTER_ACTUEEL),]
+trendN <- trend_fychem(fychem_vast, filter = "Ntot", grens1 =0.25, grens2 =0.15)
+trendP <- trend_fychem(fychem_vast, filter = "Ptot", grens1 =0.05, grens2 =0.01)
 
+# hier dcast om tabel met header kwaliteitslementen te maken
+trendN_trendbesc <- dcast.data.table(setDT(trendN), EAGIDENT ~ locatie, value.var = c("trend_beschr"), fill = "")
+# merge tekst
+trendN_trendbesc[, mergetekst := do.call(paste, c(.SD, sep = " ")), .SDcols = 2:ncol(trendN_trendbesc)]
+# trim character columns from starting and ending space
+trendN_trendbesc$mergetekst <- gsub("^ *|(?<= ) | *$", "", trendN_trendbesc$mergetekst, perl = TRUE)
 
-# Brondata hydrobiologie en waterkwaliteit
+# hier dcast om tabel met header kwaliteitslementen te maken
+trendP_trendbesc <- dcast.data.table(setDT(trendP), EAGIDENT ~ locatie, value.var = c("trend_beschr"), fill = "")
+# merge tekst
+trendP_trendbesc[, mergetekst := do.call(paste, c(.SD, sep = " ")), .SDcols = 2:ncol(trendP_trendbesc)]
+# trim character columns from starting and ending space
+trendP_trendbesc$mergetekst <- gsub("^ *|(?<= ) | *$", "", trendP_trendbesc$mergetekst, perl = TRUE)
 
-Hieronder staan een aantal functies om gegevens van hydrobiologie en waterbalansen in te laden en bewerken. NB. Moet nog worden aangevuldd
+trendfychem <- merge(trendP_trendbesc[,c('EAGIDENT','mergetekst')], trendN_trendbesc[,c('EAGIDENT','mergetekst')], by = 'EAGIDENT')
+trendfychem[, trendNP := paste0("In ", EAGIDENT, ": ", mergetekst.x, " ",mergetekst.y)]
+saveRDS(trendfychem, file = './data/trendfychem.rds')
+```
 
-```{r ppr hydrobiologie}
+# Dataset dashboard maken
 
+```{r}
+dashboard_data <- createDashboarddata(ekrlijst, minjaar = 2006, trendjaar = 2017, outdir = './output')
+# load all factshets from input dir
+inputdir <- './factsheets/output'
+FS <- list.files(path= paste0(inputdir), pattern=".html", full.names =  F)
+FS <- as.data.table(FS)
+FS[,fs:=FS]
+# create data frame to match EAG 2 factsheet
+FS[,fs := lapply(FS, function(x) gsub(".html", "", x))]
+gebieden <- data.table::tstrsplit(FS$fs, split=c('_'), fixed=TRUE)
+FS <- cbind(FS, as.data.table(gebieden))
+FS <- melt.data.table(FS, idvars = "FS", measure.vars = colnames(FS[,4:13]))
+FS<- FS[!is.na(value),]
+# merge data with factsheet url
+dashboard_data <- merge(dashboard_data, FS[,c('FS','value')], by.x = 'EAGIDENT', by.y = 'value')
+dashboard_data[,URL := paste0('https://mapsi.waternet.local/factsheets/',FS)]
+dashboard_data[,FS := NULL]
+write.table(dashboard_data, file = paste("./output/ECOLOGIE_TOESTANDOORDEELTRENDDOELGAT",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
+ 
 ```
 
 # Waterbalansen laden en bewerken
 
-```{r}
-# laden: Rdata file die meegestuurd is
-dat <- readRDS("../data/dat.rds") # data kan worden gecreerd obv script: loadbalances
+```{r eval = FALSE}
+# load data on Q and P from waterbalansen: set the project dir of were the excel files are located 
+dat <- loadBalances_lm(dir_bal = 'c:/Users/laura/SPRINGG/NMISite - Documents/Projecten/O 1900 - O 2000/1971.N.23 DAS Waternet ondersteuning ecologie/03. Data en resultaten/waterbalansen/')
+setDT(dat)
 dat[,date := as.POSIXct(paste0(jaar,"-",maand,"-01"), format = '%Y-%m-%d')]
-# nonogram
-nomogram <- data.table::fread('../input/nomogram.csv')
-# datafile with P-load PC Ditch
-Overzicht_kP <- data.table::fread('../input/Overzicht_kP.csv')
-Overzicht_kP <- ppr_pcditch(db = Overzicht_kP)
-pvskp <- ppr_pmaps(dat, Overzicht_kp, hybi, nomogram) 
-saveRDS(pvskp, file ='../data/pvskp.rds')
+# add gebiedscodes per balance
+dat <- ppr_wbalfiles(dat, EAG = EAG)
+# nonogram 4 calculation of kP based on metamodel PCditch
+nomogram <- data.table::fread('./input/waterstoffenbalansen/nomogram.csv')
+# datafile with P-load 2 overrule metamodel data and add known kP's from PClake
+Overzicht_kP <- data.table::fread('./input/waterstoffenbalansen/Overzicht_kP.csv')
+# bodemtype (kan beter opnieuw worden afgeleid obv bodemkaart)
+meanSoil <- readRDS("./input/waterstoffenbalansen/init.rds")
+# aggregated waterbalancedata with critical loads
+pvskp <- ppr_pmaps(dat, Overzicht_kp, hybi, nomogram, meanSoil) 
+
+saveRDS(dat, file ='./data/dat.rds')
+saveRDS(pvskp, file ='./data/pvskp.rds')
+
 ```
 
-# Write EAG as an gpkg
 # BRP & Bodemschat
+
+```{r}
+#bodemschat
+bodemschatAGV<- st_read("../data/bodemschatAGV.gpkg") %>% st_transform(proj4.rd)
+# agrarische percelen
+brpAGV <- st_read('../data/brpAGV.gpkg')%>% st_transform(proj4.rd)
+gbrpAGV <- brpAGV %>% st_transform(proj4.google)
+```
+
+# Ecosysteemtoestanden
+
+```{r bereken EST beschrijving toestand}
+source('./scripts/EST_laura.R')
+# inlezen basis domeintabellen
+EST_omschrijving <- fread("./input/uitgangspunten/grenswaarden_est.csv", header = TRUE)
+
+# select vegetatie uit hybi
+veg_mons <- hybi$monsterident[hybi$analyse == 'PTN']
+macft <- hybi[monsterident %in% veg_mons & !is.na(monsterident) & !is.na(EAGIDENT) & !EAGIDENT == "",]
+
+#### KOPPELING AAN BIOTAXON_INFO (oeversoorten en submerse soorten)-----------------------------
+soortenlijst_submers <- na.omit(unique(macft$biotaxonnaam[macft$submers == '1']))
+soortenlijst_emers <- na.omit(unique(macft$biotaxonnaam[macft$emers == '1']))
+soortenlijst_oever <- na.omit(unique(macft$biotaxonnaam[macft$oever == '1']))
+soortenlijst_kroos <- na.omit(unique(macft$biotaxonnaam[macft$kroos == '1']))
+
+# grenzen
+grens_drijf <- 40 # 10 is 0.6 ekr in sloten, 40 is beschrijving EST en ekr 0.4
+grens_zicht <- 0.6 # licht op de bodem
+grens_n_soort <- 5 # species
+grens_woeker <- 70 
+grens_submers <- 30 # grens submers sloten
+grens_kroos <- 15 # grens kroos sloten 15
+grens_flab <- 50 #  grens flab sloten 15 onvoldoende onderscheidend, bij > 50% neemt de ekr af
+gr_riet <-15
+gr_soorten <- 15 # o2 en o4 komen niet voor bij 15 soorten
+
+#####EST_ANALYSE-----
+
+estout <-NULL
+for(i in unique(macft$monsterident)){
+  print(i) 
+  # grenswaarde is geen input meer maar uit de functie en zou eigenlijk automatisch gegenereerd moeten worden of anders geprogrammeerd/selecteerd
+  out <- monstextract(i, macft, soortenlijst_submers, soortenlijst_kroos, soortenlijst_oever, grenswaarden_EST)
+  if(is.null(out)){next}
+  # collect the data for that specific water body / EAG / GAF
+  estout <- rbind(estout, out)
+}
+
+### EST-RESULT Post Processing----
+# convert beschoeing into numeric
+estout$beschoeid<- gsub("ja", 1, estout$beschoeid)
+estout$beschoeid<- gsub("nee", 0, estout$beschoeid)
+estout$beschoeid<- as.integer(estout$beschoeid)
+
+# doorzicht/ diepte moet groter zijn dan 1
+estout<- estout[!estout$doorz_diep > 1,]
+write.table(estout, paste0("output/estmonster_", Sys.Date(),".csv"), sep=";", dec=".", row.names=F)
+saveRDS(estout, file = './data/estmonster.rds')
+
+# aggregate per location
+estloc <- EST_aggloc(estout)
+estloc <- EST_addnameloc(estloc, eag_wl)
+saveRDS(estloc, file = './data/estloc.rds')
+
+# aggregate and add names per EAG
+esteag <- EST_aggeag(estloc)
+esteag <- EST_addnameeag(esteag, EST_omschrijving, eag_wl)
+saveRDS(esteag, file = './data/esteag.rds')
+# esteag <- readRDS('./data/esteag.rds')
+
+# add toestandbeschrijving per EAG
+wqmeanEAG <- calcMeanWq(wq.sel = fychem, nyears = 5, smonth = 4:9, pEAG = TRUE, pYEAR = TRUE, pSEASON = FALSE)
+esteag[,lastyear := max(jaar), by = c('EAGIDENT')]
+esteag <- esteag[jaar == lastyear,]
+
+est_wq <- merge(esteag, wqmeanEAG, by=c('EAGIDENT','jaar'), all.x = TRUE)
+toestandbeschrijving_eag <- toestandbeschrijving(est_wq)
+saveRDS(toestandbeschrijving_eag, file = './data/eagtoestandbeschrijving.rds')
+
+# validate koppeltabel tbv factsheets (are all possible EST's present in koppeltabel 2 pictures)
+checkkt <- EST[!estnaam %in% unique(EST_kt$estnaam),]
+unique(checkkt$estnaam)
+
+```
+
+
+
 
 
