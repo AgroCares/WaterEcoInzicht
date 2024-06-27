@@ -57,6 +57,13 @@ ppr_ekr <- function(db, doelen){
   # merge with doelen & db
   db <- merge(db, doelgeb[,c('waterlichaam_code','Waardebepalingsmethode','GEP_2022')], by.x = c('waterlichaam_code','facet_wrap_code'), by.y = c('waterlichaam_code','Waardebepalingsmethode'), all.x = TRUE)
   
+  # merge with additional information on taxa/ parameters 
+  db <- merge(db, sompar, by.x = c('Biotaxon.naam','KRWwatertype.code'), by.y = c('Deelparameter.omschrijving','KRWwatertype.code'), all.x =TRUE)
+  db[, somparname := Somparameter.omschrijving]
+  db[, somparname := gsub("Macrofyten - scorende soorten","waterplanten",somparname)]
+  db[, somparname := gsub("Waterplanten","waterplanten",somparname)]
+  db[, somparname := gsub("Oeverplanten","(natte) oeverplanten", somparname)]
+  
   return(db)
 }
 
@@ -332,7 +339,6 @@ beschrijvingtrend <- function(ekrtrendeag){
   return(ekr_scores_trendbesc)
 }
 
-
 # create data for dashboard schoon water AGV
 createDashboarddata <- function(ekrlijst, minjaar = 2006, trendjaar = 2017, outdir = outdir){
   # make local copy (only within this function)
@@ -391,17 +397,14 @@ createDashboarddata <- function(ekrlijst, minjaar = 2006, trendjaar = 2017, outd
 }
 
 # calculate mean wq data
-calcMeanWq <- function(wq.sel = wq.sel, nyears = 3, smonth = 1:12, pEAG = TRUE, pYEAR = TRUE, pSEASON = FALSE){
+wq.sel <- apriltmsep
+calcMeanWq <- function(wq.sel = wq.sel, nyears = 3, smonth = 1:12, pEAG = TRUE, pYEAR = TRUE, pSEASON = TRUE){
   
   # make local copy
   b = copy(wq.sel) 
   
   # adjust fews parameter names
   b[,parameterid := gsub("/","_",parameterid)]
-  
-  # dcast table
-  b <- dcast(b, locatie+EAGIDENT+watertype+compartiment+jaar~parameterid+parameter+parameterfractie, 
-             value.var = "meetwaarde", fun.aggregate = mean)
   
   # add dynamic grouping variable depening on function input
   groups <- c('compartiment','EAGIDENT','watertype')
@@ -425,6 +428,7 @@ calcMeanWq <- function(wq.sel = wq.sel, nyears = 3, smonth = 1:12, pEAG = TRUE, 
   return(b)
   
 }
+
 # calculate trend wq data
 trend_fychem <- function(fychem_vast, filter = "Ntot", grens1 =0.25, grens2 =0.15 ){
   dt <- fychem_vast[parameter %in% filter,]

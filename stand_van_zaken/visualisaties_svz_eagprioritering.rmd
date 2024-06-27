@@ -117,18 +117,19 @@ krwflora <- krw[krw$GHPR_level == "2V1 Overige waterflora" , ] # alleen maatlat 
 
 # waterkwaliteit-------------
 # per location, given season and year
-wq.sel <- wq[,.(locatiecode,fewsparameter,meetwaarde,jaar,maand)]
+fychem[,maand:= month(datum)]
+wq.sel <- fychem[,.(locatie,parameterid,meetwaarde,jaar,maand, EAGIDENT, KRW_SGBP3, compartiment, watertype, FEWSFILTER_ACTUEEL)]
 wq.sel[,season := fifelse(maand %in% 4:10,'summer','winter')]
-# selectie relevant parameters
-wq.par <- c('Ptot_mgP_l','PO4_mgP_l_nf',"NO3_mgN_l_nf","Ntot_mgN_l_nf",'NH4_mgN_l_nf',"ZICHT_m","Cl_mg_l" ,
-           'O2_mg_l','pH','T_oC','SO4_mg_l',"SO4_mg_l_nf",'CHLFa_ug_l',
-           "CHLFa_ug_l_blauwalg" , "Ca_mg_l",
-           "Ca_mg_l_nf",'MGETAL_mgHCO3_l',"MGETAL_mgHCO3_l_nf","Mg_mg_l","Mg_mg_l_nf","ZS_mg_l" )
-wq.sel <- wq.sel[fewsparameter %in% wq.par]
 # samenvoegen parameters met verschillende gerapporteerde hoedanigheid, maar waarschijnlijk zelfde methode
-wq.sel$fewsparameter <- gsub('_nf','',wq.sel$fewsparameter) 
-wq.sel.wide <- dcast(wq.sel,locatiecode+jaar+season~fewsparameter, value.var = 'meetwaarde', fun.aggregate = median)
-wq.sel.wide$mp_yr <- paste0(wq.sel.wide$locatiecode,wq.sel.wide$jaar)
+wq.sel$fewsparameter <- gsub('_nf','',wq.sel$parameterid) 
+# selectie relevant parameters
+wq.par <- c('Ptot_mgP_l','PO4_mgP_l',"NO3_mgN_l","Ntot_mgN_l",'NH4_mgN_l',"ZICHT_m","Cl_mg_l" ,
+           'O2_mg_l','pH','T_oC','SO4_mg_l',"SO4_mg_l","CHLFa_ug_l_spectro",
+           "CHLFa_ug_l_blauwalg" , "Ca_mg_l",
+           "Ca_mg_l",'MGETAL_mgHCO3_l',"MGETAL_mgHCO3_l_nf","Mg_mg_l","Mg_mg_l_nf","ZS_mg_l" )
+wq.sel <- wq.sel[parameterid %in% wq.par]
+wq.sel.wide <- dcast( wq.sel,KRW_SGBP3+EAGIDENT+locatie+watertype+parameterid+season+FEWSFILTER_ACTUEEL~jaar, value.var = 'meetwaarde', fun.aggregate = mean, fill = FALSE)
+wq.sel.wide$nmeetjaar <- rowSums(!is.na(wq.sel.wide[,6:65]))
 
 # bodem ---------------
 # selecteer monsters waar vaste bodem ondet baggerlaag is gemeten
@@ -789,7 +790,7 @@ leaflet() %>%
 
 ```{r trendanalyse, include=FALSE, eval = FALSE}
 #*VMplassen*|*VMboezem*|
-fychem_vast <- wq[grepl("*VMgemalen*", FEWSFILTER_ACTUEEL),]
+fychem_vast <- wq[grepl("*VMgemalen*|*VMplassen*", FEWSFILTER_ACTUEEL),]
 N <- fychem_vast[parameterid == "Ntot_mgN_l",]
 N <- N[meetwaarde <20,]
 N <- N[jaar >2008,]
@@ -800,6 +801,9 @@ P <- P[jaar >2008,]
 
 trendN <- trend_fychem(fychem_vast[jaar >2006,], filter = "Ntot", grens1 =0.25, grens2 =0.15)
 trendP <- trend_fychem(fychem_vast[jaar >2006,], filter = "Ptot", grens1 =0.05, grens2 =0.01)
+chla <- fychem_vast[jaar> 2006 & parameterid == "CHLFa_ug_l_spectro",]
+trendChlorofylA <- trend_fychem(chla, filter = "CHLFa", grens1 =20, grens2 =10)
+#ZHG chlorofylA
 
 # trend N en P --- all locs
 ggplot(data= N, aes(x=datum, y=meetwaarde, group = locatie))+

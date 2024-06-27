@@ -16,11 +16,11 @@ import_wqdata <- function(path = paste0('./input/', snapshot, '/fychem/'), locat
   # couple data 2 water catchments by location code
   fychem <- fychem[,grep('locatie ', colnames(fychem)):= NULL]
   fychem <- fychem[,grep('WNA ', colnames(fychem)):= NULL]
-  fychem[,locatie := locatiecode]
-  fychem <- merge(fychem, location, by.x = 'locatie', by.y = 'CODE')
+  if('locatiecode' %in% colnames(fychem)){fychem[,locatie := locatiecode]}
+  fychem <- merge(fychem, location, by.x = 'locatie', by.y = 'CODE', all.x = TRUE)
   
-  fychem[,parameterid := fewsparameter]
-  fychem[,analyse := analysecode]
+  if('fewsparameter' %in% colnames(fychem)){fychem[,parameterid := fewsparameter]}
+  if('analysecode' %in% colnames(fychem)){fychem[,analyse := analysecode]}
   # couple data 2 additional parameterinfo
   fychem <- merge(fychem, parameter[,c("code","naam", "categorie", "H_min", "H_max")], by.x = 'parameterid', by.y = 'code')
   setnames(fychem, c("naam"),c("parameterid_naam"))

@@ -21,7 +21,7 @@ val_hybi <- function(hybi){
 
 val_hybi2 <- function(hybi){
   
-  hybi_val <- dcast(hybi,analyse+KRW_SGBP3+EAGIDENT+compartiment~jaar, value.var = 'locatie', fun.aggregate = uniqueN)
+  hybi_val <- dcast(hybi,analyse+KRW_SGBP3+watertype+EAGIDENT+compartiment~jaar, value.var = 'locatie', fun.aggregate = uniqueN)
   # hybi_val <- hybi_val[!is.na(KRW_SGBP3)&!KRW_SGBP3 == ""&!is.na(EAGIDENT),]
   
   return(hybi_val)

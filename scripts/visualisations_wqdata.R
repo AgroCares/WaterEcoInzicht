@@ -924,3 +924,11 @@ ppr_dieptekaart<- function (hybi, gebieden = gEAG, gbrpAGV, kansrijk = TRUE, han
   
 }
 
+
+
+# standard time series vis -----------
+
+ggplot()+
+  geom_boxplot(data = obtbod[parameterid %in% c("Ptot_mgP_l"   ,  "Ptot_mgP_l_nf")  ,], aes(x = as.factor(jaar), y = meetwaarde))
+# overview locs per
+obthybi[, nloc :=  uniqueN(locatie), by = 'jaar']

@@ -26,6 +26,7 @@ options(encoding = "UTF-8")
 
 #  Directories and names------------------------------------------
 #  Define the year the data is created 
+# snapshot <- "20230803"
 snapshot <- "20240527"
 dirKRW <- "./data/krw/"
 if(!dir.exists(dirKRW)){dir.create("../data/krw/")}
@@ -55,10 +56,12 @@ biotaxon <- data.table::fread(paste0('./input/', snapshot, '/biotaxon.csv'), fil
 parameter <- data.table::fread(paste0('./input/', snapshot, '/parameterid.csv'), fill = TRUE)
 
 # merge location with eag table for waterbody and watertype (as long as location is not updated automatically)
-locaties <- merge(locaties, eag_wl[,c('EAGIDENT','GAFNAAM','KRW_SGBP3','watertype')], by.x = 'EAGIDENT', by.y = 'EAGIDENT', all.x = TRUE)
+locaties <- merge(locaties, eag_wl[,c('EAGIDENT','GAFNAAM','KRW_SGBP3','watertype')], by.x = 'EAGIDENT', by.y = 'EAGIDENT', all.x = TRUE, all.y =FALSE)
 locaties[,OWMIDENT := NULL]
 # add GAF/ aan afvoergebied code (it is not correct in the table)
 locaties$GAFIDENT <- sapply(strsplit(locaties$EAGIDENT, '-'), `[`, 1)
+locaties <- locaties[!is.na(CODE),]
+
 ```
 
 # KRW data
@@ -78,8 +81,10 @@ orderMaatlatten$GHPR <- trimws(orderMaatlatten$GHPR)
 ekrlijst <- importKRW(inputdir = paste0("./input/", snapshot,"/rapportagefiles"), locaties = locaties, eag_wl, orderMaatlatten)
 # goals per EAG/ water body
 doelen <- data.table::fread(paste0("./input/", snapshot,'/Doelen.csv'))
+# load addition paramter/ taxa information from the aquo-kit
+sompar <- fread(paste0(workspace, 'input/domeinen_krw/Somparametersamenstelling_updated_LM.csv'), encoding = "Latin-1") 
 # add KRW doelen/ goals of waterbodies
-ekrlijst <- ppr_ekr(ekrlijst, doelen = doelen) 
+ekrlijst <- ppr_ekr(ekrlijst, doelen = doelen, sompar = sompar) 
 
 #validate ekrdata
 krw_val <- val_ekrlijst(ekrlijst)
@@ -95,7 +100,6 @@ ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_6_6') & facet_wrap_code == 'Ov. wa
 # SAP, 3201-EAG-2 mist tm 2012: mogelijk omdat er alleen OW en geen EZ locaties zijn? 
 
 saveRDS(ekrlijst, file= paste0("./data/krw/ekrlijst",".rds"))
-
 EKRset <- ekrlijst[Hoedanigheid.code == 'EKR',]
 
 ```
@@ -183,9 +187,9 @@ saveRDS(hybi, file = './data/hybi.rds')
 # readRDS('./data/hybi.rds')
 ```
 
-```{r impor fychem}
+```{r import fychem}
 #import chemical data
-fychem <- import_wqdata(path = paste0('./input/', snapshot, '/fychem/'), location = locaties, parameter = parameter)
+fychem <- import_wqdata(path = paste0('./input/', snapshot, '/fychem/'), location = locaties, parameter = parameter, pattern = c('.txt','.csv'))
 # post process chemical data (take only relevant categories, which differs for each type of analysis) 4 use in atlas_toestand
 fychem <- ppr_wqdata(fychem, syear = 1900, srow = c("HYBIO","IONEN","NUTRI","ALG","VELD","ALGEN","LICHT","MONSVAR","METAL","NUTRI_KRWTOETS","ALG_KRWTOETS","ALGEN_KRWTOETS","HYBIO_KRWTOETS","KRWTOETS","IONEN_KRWTOETST", "VELD_KRWTOETST"))
 fychem  <- fychem[!meetwaarde == -999,]
@@ -196,7 +200,7 @@ saveRDS(fychem, file = './data/fychem.rds')
 
 ```{r impor bodchem}
 #import chemical data
-bodchem <- import_wqdata(path = paste0('./input/', snapshot, '/bodemchemie/'), location = locaties, parameter = parameter)
+bodchem <- import_wqdata(path = paste0('./input/', snapshot, '/bodemchemie/'), location = locaties, parameter = parameter, pattern = '.txt')
 duplicate_bod <- bodchem[duplicated(bodchem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","datum","biotaxonnaam","limietsymbool","meetwaarde","afronding")),]
 
 # post process chemical data
@@ -213,7 +217,7 @@ hybi_val <- val_hybi(hybi)
 write.table(hybi_val, file = paste("./output/valhybi",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
 
 hybi_val2 <- val_hybi2(hybi)
-write.table(hybi_val, file = paste("./output/valhybi",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
+write.table(hybi_val, file = paste("./output/valhybicomp",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
 ```
 
 
