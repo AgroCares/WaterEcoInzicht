@@ -78,7 +78,7 @@ importKRW <- function(inputdir = inputdir,
   # EKRlijst[EAGIDENT == locatie | GeoObject.code == KRW_SGBP3, aggregated := 'ja']
   EKRlijst[EAGIDENT == locatie | krwlocatie == locatie, aggregated := 'ja']
   # make classes a factor
-  EKRlijst$klasse <- as.factor(EKRlijst$Classificatie)
+  EKRlijst[Hoedanigheid.code == 'EKR' ,klasse := cut(Numeriekewaarde, breaks=c(0,0.2,0.4,0.6,0.8,1), include.lowest = TRUE)]
   # add year
   EKRlijst$jaar<- format(EKRlijst$Begindatum, '%Y')
   EKRlijst$jaar<- as.numeric(EKRlijst$jaar)

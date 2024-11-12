@@ -82,6 +82,7 @@ De inputgegevens die nodig zijn bestaan zowel uit invoergegevens die worden geï
 orderMaatlatten <- fread('./input/domeinen_krw/orderMaatlatten.csv', encoding = "Latin-1") 
 orderMaatlatten$GHPR <- trimws(orderMaatlatten$GHPR)
 ekrlijst <- importKRW(inputdir = paste0("./input/", snapshot,"/rapportagefiles"), locaties = locaties, eag_wl, orderMaatlatten)
+
 # goals per EAG/ water body
 doelen <- data.table::fread(paste0("./input/", snapshot,'/Doelen.csv'))
 # load addition paramter/ taxa information from the aquo-kit
@@ -91,7 +92,6 @@ ekrlijst <- ppr_ekr(ekrlijst, doelen = doelen, sompar = sompar)
 #validate ekrdata
 krw_val <- val_ekrlijst(ekrlijst)
 # filter only eags were watertype is correct
-ekrlijst <- ekrlijst[paste0(EAGIDENT,KRWwatertype.code) %in% unique(paste0(EAG$EAGIDENT,EAG$OWMTYPE))]
 # Botshol 2011 waar zijn monsters eag 2 gebleven?
 # stichts ankeveen 2006 idem?
 # vinkeveen eag 3 in 2006 weg?
@@ -236,18 +236,15 @@ In onderstaande code wordt de output geaggregeerd naar gemiddelden ekr per gebie
 # Actueel = LAATSTE 3 beschikbare meetjaren in periode 2011 tm 2021 (meeste recente beschikbare gegevens)
 # Referentietoestand = de EERSTE 3 beschikbare meetjaren in de periode 2006 tm 2013 (gelijk aan referentie voor overige wateren)
 ekr_scores <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR',], detail = "deel", minjaar = 2012, outdir = "./output")
-
 # Einde planperiode 1 = LAATSTE 3 beschikbare meetjaren in periode 2003 tm 2014 (gelijk aan Toestand 2015 factsheets in WKP*) -2009tm2015
 ekr_scores_wbp1 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2005 & jaar < 2015,], detail = "deel", minjaar = 2004, outdir = "./output")
 # Einde planperiode 2 = LAATSET 3 beschikbare meetjaren in periode 2010 tm 2020 (gelijk aan Toestand 2021 factsheets in WKP*) -2016tm2021
 ekr_scores_wbp2 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2014 & jaar < 2021,], detail = "deel", minjaar = 2010, outdir = "./output")
 ekr_scores_wbp3 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2020 & jaar < 2027,], detail = "deel", minjaar = 2012, outdir = "./output")
-
 # aggregated waterbody scores for app and atlas toestand
 ekr_scores1 <- ekr_scores[aggregated == 'ja', ] # alleen gewogen scores selecteren
 # non aggregated scores for tab per EAG for app and atlas toestand
 ekr_scores2 <- ekr_scores[aggregated == 'nee', ] # alleen ongewogen scores selecteren
-
 # save subsets
 saveRDS(ekr_scores, file= paste0(dirKRW, "ekr_scores",".rds"))
 saveRDS(ekr_scores_wbp1, file= paste0(dirKRW, "ekr_scores_wbp1",".rds"))

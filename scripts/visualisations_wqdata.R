@@ -4,6 +4,7 @@ ppr_ekrplot_EAG <- function(ekr_score){
   
   # make local copy
   dt <- copy(ekr_score)
+  dt <- dt[level == 1,]
   
   # facet per maatlat en EAG (als FS niveau is GAF en meerdere EAGs)
   dt[,facet_wrap_code := as.character(facet_wrap_code)]
@@ -24,10 +25,7 @@ ppr_ekrplot_EAG <- function(ekr_score){
   bg_gather[,sgbp_version := fifelse(grepl('_new$',doelen),'new','old')]
   bg_gather[,varrange := fifelse(grepl('_ymin_',doelen),'ymin','ymax')]
   bg_gather[,doelen := gsub("(.+?)(\\_.*)", "\\1", doelen)]
-  bg_spr <- dcast.data.table(bg_gather,id+GEP_2022+wlmt+doelen+sgbp_version~varrange,value.var='waarde')
-  
-  # add sgbp version
-  bg_spr[sgbp_version=='new',sgbp_version := 'SGBP3']
+  bg_spr <- dcast.data.table(bg_gather,waterlichaam+GEP_2022+wlmt+doelen~varrange,value.var='waarde')
   bg_spr[,Oordeel := as.factor(doelen)]
   
   #Create a custom color scale
@@ -69,6 +67,7 @@ ppr_ekrplot_gebied <- function(ekr_score){
   
   # make local copy
   dt <- copy(ekr_score)
+  dt <- dt[level == 1,]
   
   # facet per maatlat en EAG (als FS niveau is GAF en meerdere EAGs)
   dt[,facet_wrap_code := as.character(facet_wrap_code)]
@@ -89,10 +88,9 @@ ppr_ekrplot_gebied <- function(ekr_score){
   bg_gather[,sgbp_version := fifelse(grepl('_new$',doelen),'new','old')]
   bg_gather[,varrange := fifelse(grepl('_ymin_',doelen),'ymin','ymax')]
   bg_gather[,doelen := gsub("(.+?)(\\_.*)", "\\1", doelen)]
-  bg_spr <- dcast.data.table(bg_gather,id+GEP_2022+wlmt+doelen+sgbp_version~varrange,value.var='waarde')
+  bg_spr <- dcast.data.table(bg_gather,waterlichaam+GEP_2022+wlmt+doelen~varrange,value.var='waarde')
   
-  # add sgbp version
-  bg_spr[sgbp_version=='new',sgbp_version := 'SGBP3']
+  # 
   bg_spr[,Oordeel := as.factor(doelen)]
   
   #Create a custom color scale
@@ -181,11 +179,10 @@ plotEKRlijnfs <- function(z, gebied = NULL){
 # fractieplots
 # 4 tab per EAG
 plotFractiePerMaatlatFacetEAG <- function(l){
-  l <- l[!is.na(l$CODE),] # geen totaal scores per toetsgebied meenemen
-  l<- l[is.na(l$Monster.lokaalID)|l$Monster.lokaalID == "",] # alleen scores per meetCODE per jaar
-  l$GHPR_level <- as.factor(l$GHPR_level)
-  l$GHPR_level <- factor(l$GHPR_level, levels = rev(levels(l$GHPR_level)))
-  l$klasse <- factor(l$klasse, levels = c("3", "4", "5", "6","7"), labels = c("0.8-1","0.6-0.8","0.4-0.6","0.2-0.4","0-0.2"))
+ 
+  l[,GHPR_level := as.factor(GHPR_level)]
+  l[,GHPR_level := factor(l$GHPR_level, levels = rev(levels(l$GHPR_level)))]
+  l[,klasse := factor(l$klasse, levels = c("[0,0.2]","(0.2,0.4]","(0.4,0.6]","(0.6,0.8]","(0.8,1]"), labels = c("0-0.2","0.2-0.4","0.4-0.6","0.6-0.8","0.8-1"))]
   
   ggplot(l, aes(x = GHPR_level, fill = klasse)) +
     geom_bar(position = "fill") +
@@ -210,13 +207,13 @@ plotFractiePerMaatlatFacetEAG <- function(l){
     facet_grid(jaar~facet_wrap_code+EAGIDENT)+
     labs(x="",y="")
 }
+
 # 4 tab per waterbody
 plotFractiePerMaatlat <- function(l){
-  l <- l[!is.na(l$CODE),] # geen totaal scores per toetsgeied meenemen
-  l<- l[is.na(l$Monster.lokaalID)|l$Monster.lokaalID == "",] # alleen scores per meetCODE per jaar
+ 
   l$GHPR_level <- as.factor(l$GHPR_level)
   l$GHPR_level <- factor(l$GHPR_level, levels = rev(levels(l$GHPR_level)))
-  l$klasse <- factor(l$klasse, levels = c("3", "4", "5", "6","7"), labels = c("0.8-1","0.6-0.8","0.4-0.6","0.2-0.4","0-0.2"))
+  l[,klasse := factor(l$klasse, levels = c("[0,0.2]","(0.2,0.4]","(0.4,0.6]","(0.6,0.8]","(0.8,1]"), labels = c("0-0.2","0.2-0.4","0.4-0.6","0.6-0.8","0.8-1"))]
   
   ggplot(l, aes(x = GHPR_level, fill = klasse)) +
     geom_bar(position = "fill") +
@@ -821,7 +818,6 @@ fractie_score_taxa_nsoort <- function(krw, pars = "OEVPTN", titel = "Aantal en k
     labs(x= "",y="")
   
 }
-
 
 # ekr per eag en mp
 ppr_mapPpercWatb <- function(pvskp, gEAG,param = 'p_uitspoel'){
