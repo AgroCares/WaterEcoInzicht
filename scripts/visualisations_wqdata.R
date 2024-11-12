@@ -773,112 +773,56 @@ ppr_dieptekaart<- function (hybi, gebieden = gEAG, background = gbrpAGV, kansrij
   
 }
 
-fractie_score_taxa <- function(l){
+# species count & indicator species
+fractie_score_taxa_nsoort <- function(krw, pars = "OEVPTN", titel = "Aantal en kwaliteit van verschillende soorten waterplanten"){
   # select only non aggregated scores per sample point
-  l <- l[!is.na(l$CODE),] 
+  dt <- krw[aggregated == 'nee',] 
   # select relevant parameters (waarnemingssoort = grootheid, parameter, typering)
   # aanwezigheid = score per taxa based on abundance per taxa
-  l <- l[GHPR %in% c("Aanwezigheid", "Soortenrijkdom Oeverplanten", "Soortenrijkdom Waterplanten") ,] # score per taxa/bedekking
+  dt <- dt[GHPR %in% c("Aanwezigheid", "Soortenrijkdom Oeverplanten", "Soortenrijkdom Waterplanten", "Soortenrijkdom Macrofyten",
+                       "Soortensamenstelling macrofyten Waterplanten","Soortensamenstelling macrofyten Oeverplanten", 'Soortensamenstelling macrofyten') ,] # score per taxa/bedekking
   # convert scores per taxa into quality judgement
-  l$klasse <- cut(l$Numeriekewaarde, breaks = c(-9,0,3,6,9), labels = c('ongewenst','minder gewenst','gewenst','zeer gewenst'))
+  dt$klasse <- cut(dt$Numeriekewaarde, breaks = c(-9,0,3,6,9), labels = c('ongewenst','minder gewenst','gewenst','zeer gewenst'))
   # calculate richness taxa dived by count
-  # l_sov <- l[,mean(Numeriekewaarde[GHPR == "Soortenrijkdom Oeverplanten"]), by = c('jaar')]
-  # l <- l[,soortenrijkdom_ov := mean(Numeriekewaarde[GHPR == "Soortenrijkdom Oeverplanten"])/ length(Numeriekewaarde[GHPR == "Aanwezigheid"]), by = jaar]
-  # l <- l[,soortenrijkdom_wp := mean(Numeriekewaarde[GHPR == "Soortenrijkdom Waterplanten"])/ length(Numeriekewaarde[GHPR == "Aanwezigheid"]), by = jaar]
-  l <- l[,soortenrijkdom_tot := (mean(Numeriekewaarde[GHPR == "Soortenrijkdom Waterplanten"])+ mean(Numeriekewaarde[GHPR == "Soortenrijkdom Oeverplanten"]))/ length(Numeriekewaarde[GHPR == "Aanwezigheid"]), by = jaar]
-  # filter data
-  l <- l[GHPR %in% c("Aanwezigheid"), ]
+  dt <- dt[,soortenrijkdom_tot := mean(Numeriekewaarde[Grootheid.code == "SOORTRDM" & Parameter.code %in% pars])/ length(Numeriekewaarde[GHPR == "Aanwezigheid" & Somparameter.code %in% pars]), by = jaar]
+  # when no species are present
+  if(!"Aanwezigheid" %in% unique(dt$GHPR)){
+    dt[,soortenrijkdom_tot := 0]
+    dt <- dt[Parameter.code %in% pars]}else{
+      # filter data
+      dt <- dt[GHPR %in% c("Aanwezigheid"), ]
+      dt <- dt[Somparameter.code %in% pars,]
+    }
   # format data for plot
-  l$jaar_char <- as.character(l$jaar)   
-  titel <- unique(l$EAGIDENT)
+  dt[,jaar_char := as.character(jaar)] 
+  
   # plot
-  ggplot(l, aes(x = jaar_char, y = soortenrijkdom_tot, fill = klasse)) +
+  ggplot(dt, aes(x = jaar_char, y = soortenrijkdom_tot, fill = klasse)) +
     geom_bar(stat = "identity") +
-    scale_fill_manual(values= c("zeer gewenst"="blue","gewenst"="green","minder gewenst"="yellow", "ongewenst"="red"))+
-    guides(fill=guide_legend(title='Indicatiewaarde kenmerkende soorten'))+
+    scale_fill_manual(values= c("zeer gewenst"="#00AFBB","gewenst"="#52854C","minder gewenst"="#E7B800", "ongewenst"="#FC4E07"))+
+    guides(fill=guide_legend(title='Kwaliteit soorten'))+
+    scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
     theme_minimal()+
     theme(
       strip.background = element_blank(),
       strip.text.x = element_text(size = 7), #waardebepmethode
       strip.text.y = element_text(size = 6), #level
-      axis.text.x = element_text(size= 8), #jaar
-      axis.text.y = element_text(size= 7),
+      axis.text.x = element_text(size= 10), #jaar
+      axis.text.y = element_text(size= 10),
       axis.ticks =  element_line(colour = "black"),
       panel.background = element_blank(),
       plot.background = element_blank(),
-      legend.title = element_text(size = 7),
-      legend.text  = element_text(size = 6),
+      legend.title = element_text(size = 11),
+      legend.text  = element_text(size = 10),
       legend.key.size = unit(0.9, "lines"),
-      legend.position = "right")+
-    ggtitle(titel, subtitle = "Fractie indicatiewaarde kenmerkende soorten") +
-    labs(x= "",y="gemiddeld aantal kenmerkende soorten per meetlocatie")
-  
-  ggplot(l, aes(x = jaar_char, fill = klasse)) +
-    geom_bar(position = "fill") +
-    scale_fill_manual(values= c("zeer gewenst"="blue","gewenst"="green","minder gewenst"="yellow", "ongewenst"="red"))+
-    guides(fill=guide_legend(title='Indicatiewaarde kenmerkende soorten'))+
-    theme_minimal()+
-    theme(
-      strip.background = element_blank(),
-      strip.text.x = element_text(size = 7), #waardebepmethode
-      strip.text.y = element_text(size = 6), #level
-      axis.text.x = element_text(size= 8), #jaar
-      axis.text.y = element_text(size= 7),
-      axis.ticks =  element_line(colour = "black"),
-      panel.background = element_blank(),
-      plot.background = element_blank(),
-      legend.title = element_text(size = 7),
-      legend.text  = element_text(size = 6),
-      legend.key.size = unit(0.9, "lines"),
-      legend.position = "right")+
-    ggtitle(titel, subtitle = "Fractie indicatiewaarde kenmerkende soorten") +
-    labs(x="",y="")
+      legend.position = "right",
+      plot.title = element_text(hjust = 0.5))+
+    ggtitle(paste0(titel)) +
+    labs(x= "",y="")
   
 }
-bedekking_gv <- function(l){
-  #doel should be added in EKRlijst by different function
-  l$GEP <- 0.619
-  
-  # select only aggregated scores per EAG
-  l <- l[!is.na(l$CODE),] 
-  # select relevant parameters (waarnemingssoort = grootheid, parameter, typering)
-  l <- l[GHPR %in% c( "Bedekking Emerse planten", "Bedekking som submerse planten en draadalgen", "Bedekking Flab (Floating Algae Beds)" ) ,] # score per taxa/bedekking
-  # aggregate 2 EAG
-  l <- l[,lapply(.SD,mean, na.rm=TRUE),.SDcols = c('Numeriekewaarde','GEP') ,by= c('EAGIDENT','jaar','GHPR','Hoedanigheid.code')]
-  # convert scores per taxa into quality judgement
-  l[, oordeel := Numeriekewaarde[Hoedanigheid.code == 'EKR']/GEP, by = c('EAGIDENT','jaar','GHPR')]
-  l$oordeel <- cut(l$oordeel, breaks = c(0,1/3,2/3,1,5), labels = c('slecht','ontoereikend','matig','goed'))
-  # filter only %coverage
-  l <- l[Hoedanigheid.code == 'NVT',]
-  # format data for plot
-  l$jaar_char <- as.character(l$jaar)   
-  titel <- unique(l$EAGIDENT)
-  
-  # plot
-  ggplot() +
-    geom_line(data = l, aes(x = jaar_char, y = Numeriekewaarde, col = GHPR, group = GHPR)) + 
-    geom_point(data = l, aes(x = jaar_char, y = Numeriekewaarde, fill = oordeel, group = GHPR),shape=21, size = 4)+
-    scale_fill_manual(values= c("goed"="green","matig"="yellow", "ontoereikend"="orange","slecht"="red"))+
-    guides(fill=guide_legend(title='KRW oordeel'), col = guide_legend(title='Groeivorm'))+
-    theme_minimal()+
-    theme(
-      strip.background = element_blank(),
-      strip.text.x = element_text(size = 7), #waardebepmethode
-      strip.text.y = element_text(size = 6), #level
-      axis.text.x = element_text(size= 8), #jaar
-      axis.text.y = element_text(size= 7),
-      axis.ticks =  element_line(colour = "black"),
-      panel.background = element_blank(),
-      plot.background = element_blank(),
-      legend.title = element_text(size = 7),
-      legend.text  = element_text(size = 8),
-      legend.key.size = unit(0.9, "lines"),
-      legend.position = "right")+
-    ggtitle(titel, subtitle = "Vegetatiebedekking per groeivorm") +
-    labs(x= "",y=" bedekking %")
-  
-  
-}
+
+
 # ekr per eag en mp
 ppr_mapPpercWatb <- function(pvskp, gEAG,param = 'p_uitspoel'){
   

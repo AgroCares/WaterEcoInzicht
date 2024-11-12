@@ -32,6 +32,7 @@ library(plotly)
 library(ggspatial)
 library(raster)
 library(leaflet)
+library(ggpubr)
 
 source('./scripts/ppr_funs_waterecoinzicht.R')
 source('./scripts/visualisations_wqdata.R')
@@ -282,6 +283,31 @@ ppr_mapPpercWatb(ret, gEAG,param = 'p_retentie')
 
 # Overig 
 
+```{r plots wateroeverptn waarde per soort}
+for(i in unique(ekrlijst$EAGIDENT)){
+
+  krw <- ekrlijst[EAGIDENT %in% i,]
+  
+  if(!"OEVPTN" %in% unique(krw$Somparameter.code)){
+  plot <- fractie_score_taxa_nsoort(krw, pars = c("WATPTN","MFT_srtscore", "MACFT"), titel = 'water- en oeverplanten')
+  plot<- annotate_figure(plot, top = text_grob("Aantal en kwaliteit van verschillende soorten", face = "bold", size = 14))
+  annotate_figure(plot, left = text_grob("gemiddeld aantal soorten per meetlocatie", rot = 90, size = 11))
+}
+
+if("OEVPTN" %in% unique(krw$Somparameter.code)){
+  p1<- fractie_score_taxa_nsoort(krw, pars = "OEVPTN", titel = '(natte) oeverplanten')
+  p2<- fractie_score_taxa_nsoort(krw, pars = c("WATPTN","MFT_srtscore", "MACFT"), titel = '(onder)waterplanten')
+  plot<- ggarrange(p1, p2, ncol=2, common.legend = TRUE, legend="bottom")
+  plot<- annotate_figure(plot, top = text_grob("Aantal en kwaliteit van verschillende soorten", face = "bold", size = 14))
+  annotate_figure(plot, left = text_grob("gemiddeld aantal soorten per meetlocatie", rot = 90, size = 11))
+  ggplot2::ggsave(plot,file=paste0('output/',i,'soortenWaterOeverplanten.png'),
+                  width = 14, height = 10,units='cm',dpi=1000)
+} 
+}
+
+```
+
+
 ```{r plt met ekr scores en doelen}
   # create plt met ekr scores en doelen
   # loopje voor alle figuren als EKRset1 = EKRset 
@@ -296,7 +322,6 @@ ppr_mapPpercWatb(ret, gEAG,param = 'p_retentie')
 ```{r kaarten ekr scores, include=FALSE, eval=FALSE}
 # kaart maken per eag en parameter, pdf worden geexporteerd naar output/
 # update mp-id
-
 krwloc[,gebied := tstrsplit(EAGIDENT,'-',keep=1)]
 dt = krwloc[!grepl("aantalper*",krwloc$GHPR, fixed =F) & krwloc$wbmethode == "ml_2018_ov.wflora",]
 #dt = dt[dt$GHPR %in% c("Overige waterflora-kwaliteit","Soortensamenstelling macrofyten","Soortensamenstelling macrofyten Oeverplanten", "Soortensamenstelling macrofyten Waterplanten", "Bedekking som submerse planten en draadalgen")]
