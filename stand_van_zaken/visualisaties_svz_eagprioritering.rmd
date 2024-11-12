@@ -305,6 +305,29 @@ if("OEVPTN" %in% unique(krw$Somparameter.code)){
 } 
 }
 
+for(i in unique(ekrlijst$KRW_SGBP3)){
+
+  krw <- ekrlijst[KRW_SGBP3 %in% i,]
+  
+  if(!"OEVPTN" %in% unique(krw$Somparameter.code)){
+  plot <- fractie_score_taxa_nsoort(krw, pars = c("WATPTN","MFT_srtscore", "MACFT"), titel = 'water- en oeverplanten')
+  plot<- annotate_figure(plot, top = text_grob("Aantal en kwaliteit van verschillende soorten", face = "bold", size = 14))
+  annotate_figure(plot, left = text_grob("gemiddeld aantal soorten per meetlocatie", rot = 90, size = 11))
+  ggplot2::ggsave(plot,file=paste0('output/',i,'soortenWaterplanten.png'),
+                  width = 14, height = 10,units='cm',dpi=1000)
+}
+
+if("OEVPTN" %in% unique(krw$Somparameter.code)){
+  p1<- fractie_score_taxa_nsoort(krw, pars = "OEVPTN", titel = '(natte) oeverplanten')
+  p2<- fractie_score_taxa_nsoort(krw, pars = c("WATPTN","MFT_srtscore", "MACFT"), titel = '(onder)waterplanten')
+  plot<- ggarrange(p1, p2, ncol=2, common.legend = TRUE, legend="bottom")
+  plot<- annotate_figure(plot, top = text_grob("Aantal en kwaliteit van verschillende soorten", face = "bold", size = 14))
+  annotate_figure(plot, left = text_grob("gemiddeld aantal soorten per meetlocatie", rot = 90, size = 11))
+  ggplot2::ggsave(plot,file=paste0('output/',i,'soortenWaterOeverplanten.png'),
+                  width = 14, height = 10,units='cm',dpi=1000)
+} 
+}
+
 ```
 
 
