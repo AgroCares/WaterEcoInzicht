@@ -48,19 +48,21 @@ source('./scripts/validation.R')
 ```{r algemeen data}
 # load location info used in multiple chunks below
 locaties <- data.table::fread(paste0('./input/', snapshot, '/gebiedsinfo/Location.csv'))
-
+# load info on EAG: names and relation with KRW (for the future: retrieve names from EAG map and relation KRW from separate table)
 eag_wl <- data.table::fread(paste0('./input/', snapshot, '/gebiedsinfo/EAG_Opp_kenmerken_03042024.csv'))
 eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
-eag_wl$EAGIDENT <- eag_wl$GAFIDENT
-eag_wl$GAFIDENT <- sapply(strsplit(eag_wl$EAGIDENT, '-'), `[`, 1)
+eag_wl[,EAGIDENT := GAFIDENT]
+eag_wl[,GAFIDENT := sapply(strsplit(EAGIDENT, '-'), `[`, 1)]
+eag_wl[,EAGNAAM := GAFNAAM]
+eag_wl[,GAFNAAM := sapply(strsplit(EAGNAAM, ','), `[`, 1)]
 biotaxon <- data.table::fread(paste0('./input/', snapshot, '/biotaxon.csv'), fill = TRUE)
 parameter <- data.table::fread(paste0('./input/', snapshot, '/parameterid.csv'), fill = TRUE)
 
 # merge location with eag table for waterbody and watertype (as long as location is not updated automatically)
-locaties <- merge(locaties, eag_wl[,c('EAGIDENT','GAFNAAM','KRW_SGBP3','watertype')], by.x = 'EAGIDENT', by.y = 'EAGIDENT', all.x = TRUE, all.y =FALSE)
+locaties <- merge(locaties, eag_wl[,c('EAGIDENT','GAFNAAM','KRW_SGBP3','watertype')], by = 'EAGIDENT', all.x = TRUE, all.y =FALSE)
 locaties[,OWMIDENT := NULL]
 # add GAF/ aan afvoergebied code (it is not correct in the table)
-locaties$GAFIDENT <- sapply(strsplit(locaties$EAGIDENT, '-'), `[`, 1)
+locaties[,GAFIDENT := sapply(strsplit(EAGIDENT, '-'), `[`, 1)]
 locaties <- locaties[!is.na(CODE),]
 
 ```

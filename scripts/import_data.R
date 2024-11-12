@@ -30,7 +30,7 @@ import_wqdata <- function(path = paste0('./input/', snapshot, '/fychem/'), locat
 }
 
 # import output Aquo-kit ------------
-importKRW <- function(inputdir = "./input/20230803/rapportagefiles", 
+importKRW <- function(inputdir = inputdir, 
                       locaties = locaties, eag_wl, orderMaatlatten) {
   
   # load all results from aquo kit from input dir
@@ -53,7 +53,7 @@ importKRW <- function(inputdir = "./input/20230803/rapportagefiles",
   EKRlijst <- merge(EKRlijst, unique(eag_wl[,c('KRW_SGBP3','krwlocatie')]), by = 'krwlocatie', all.x = TRUE)
 
   # merge data with additional info KRW waterbody (mapped 2 eagident)
-  EKRlijst <- merge(EKRlijst, eag_wl[,c('EAGIDENT','GAFIDENT','GAFNAAM','KRW_SGBP3')], by = 'EAGIDENT',all.x = TRUE)
+  EKRlijst <- merge(EKRlijst, eag_wl[,c('EAGIDENT','GAFIDENT','EAGNAAM','KRW_SGBP3')], by = 'EAGIDENT',all.x = TRUE)
   EKRlijst[,KRW_SGBP3 := KRW_SGBP3.x]
   EKRlijst[!is.na(EAGIDENT), KRW_SGBP3 := KRW_SGBP3.y]
   EKRlijst[,c('KRW_SGBP3.x','KRW_SGBP3.y') := NULL]
@@ -62,11 +62,11 @@ importKRW <- function(inputdir = "./input/20230803/rapportagefiles",
   EKRlijst <- merge(EKRlijst, unique(eag_wl[,c('KRW_SGBP3','SGBP3_NAAM')]), by = 'KRW_SGBP3', all.x = TRUE)
  
   # add naam van een toetsgebied (WL of EAG naam)
-  EKRlijst[,waterlichaam := fifelse(!(is.na(SGBP3_NAAM)|SGBP3_NAAM == ""), SGBP3_NAAM, GAFNAAM)]
+  EKRlijst[,waterlichaam := fifelse(!(is.na(SGBP3_NAAM)|SGBP3_NAAM == ""), SGBP3_NAAM, EAGNAAM)]
   EKRlijst[,waterlichaam_code := fifelse(!(is.na(KRW_SGBP3)|KRW_SGBP3 == ""), KRW_SGBP3, EAGIDENT)]
   
   # remove data which cannot be mapped 2 location, eag or owm (fish data)
-  # checkloc <-  EKRlijst[(is.na(EAGIDENT)|EAGIDENT == "") & (is.na(KRW_SGBP3)|KRW_SGBP3 ==""),]
+  checkloc <-  EKRlijst[(is.na(EAGIDENT)|EAGIDENT == "") & (is.na(KRW_SGBP3)|KRW_SGBP3 ==""),]
   
   if(nrow(checkloc)>1){
     warning(paste0('locatie ', unique(checkloc$locatie), ' komt wel voor in toetsresultaten maar niet in meetpuntenbestand'))}
