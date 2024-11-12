@@ -60,6 +60,7 @@ eag_wl$GAFIDENT <- sapply(strsplit(eag_wl$EAGIDENT, '-'), `[`, 1)
 
 # read in the latest version of ESFoordelen from 'data'
 ESFoordelen <- ppr_esf_oordeel(dir = './input/toestand_esf/', eag_wl, ekrtrendbeschrijving, trendfychem, toestandbeschrijving_eag)
+write.table(ESFoordelen, file = paste("./output/ESFoordelen_out",format(Sys.time(),"%Y%m%d%H%M"),".csv"), quote = TRUE, na = "", sep =';', dec='.',row.names = FALSE)
 
 # informatie over maatregelen
 maatregelen <- ppr_maatregelen(dir = './input/maatregelen/')

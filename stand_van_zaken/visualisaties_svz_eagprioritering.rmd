@@ -36,7 +36,7 @@ library(leaflet)
 source('./scripts/ppr_funs_waterecoinzicht.R')
 source('./scripts/visualisations_wqdata.R')
 
-snapshot.version <- '20230803'
+snapshot.version <- '20240527'
 
 # other settings
 proj4.rd <- 28992
@@ -79,28 +79,18 @@ EAG <- st_read("./data/EAG.gpkg") %>% st_transform(28992)
 EAG$watertype <- NULL
 gEAG <- EAG %>% st_transform(4326)
 
-eag_wl <- data.table::fread(paste0('./input/', workspace, '/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv'))
+eag_wl <- data.table::fread(paste0('./input/', snapshot.version, '/gebiedsinfo/EAG_Opp_kenmerken_03042024.csv'))
 eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
 eag_wl$EAGIDENT <- eag_wl$GAFIDENT
 eag_wl$GAFIDENT <- sapply(strsplit(eag_wl$EAGIDENT, '-'), `[`, 1)
 
 #bodemschat
 bodemschatAGV<- st_read("./data/bodemschatAGV.gpkg") %>% st_transform(proj4.rd)
-# agrarische percelen
-brp <- st_read(paste0(Sys.getenv("NMI_DATA"),"landgebruik/brp/raw/brpgewaspercelen_definitief_2021.gpkg")) %>% st_transform(28992)
-brpAGV <- st_intersection(brp, EAG)   
-brpAGV$agropp <- as.numeric(st_area(brpAGV))
-brpAGV <- brpAGV[brpAGV$category %in% c('Grasland','Bouwland'),]
-setDT(brpAGV)
-brpAGV <- brpAGV[,sum(as.numeric(agropp)), by = EAGIDENT]
-# merge relative agricultural
-eag_wl <- merge(eag_wl, brpAGV, by.x = 'GAFIDENT', by.y = 'EAGIDENT', all.x = TRUE)
-eag_wl[,relagr := V1/OppLand]
-eag_wl[relagr > 0.5 & V1 > 100000, gebiedstype := 'agrarisch']
-eag_wl[StedelijkLandelijk == 'Stedelijk', gebiedstype := 'stedelijk']
-eag_wl[relagr < 0.5 & !(StedelijkLandelijk == 'Stedelijk'), gebiedstype := 'natuur']
-eag_wl[is.na(gebiedstype), gebiedstype := 'overig']
 
+# agrarische percelen
+# brp <- st_read(paste0(Sys.getenv("NMI_DATA"),"landgebruik/brp/raw/brpgewaspercelen_definitief_2021.gpkg")) %>% st_transform(28992)
+# brpAGV <- st_intersection(brp, EAG)   
+brpAGV <- st_read("./data/brpAGV.gpkg") %>% st_transform(proj4.rd)
 gbrpAGV <- brpAGV %>% st_transform(proj4.google)
 
 ```
@@ -108,37 +98,38 @@ gbrpAGV <- brpAGV %>% st_transform(proj4.google)
 ```{r make subdatasets with relevant pars and aggrgate per eag, include = FALSE}
 # ekr scores ----------
 # mean ekr per locatie en year
-krwloc <- calc_mean_EKR(db = EKRset, nyears = 22, pEAG = FALSE, pYEAR = TRUE, pSEASON = FALSE)
+# krwloc <- calc_mean_EKR(db = EKRset, nyears = 22, pEAG = FALSE, pYEAR = TRUE, pSEASON = FALSE)
 # update mp-id
-krwloc[,mpid2 := tstrsplit(mpid,'_',keep=1)]
+# krwloc[,mpid2 := tstrsplit(mpid,'_',keep=1)]
 # aggregate per EAG and year
-krw <- calc_mean_EKR(db = EKRset, nyears = 22, pEAG = TRUE, pYEAR = TRUE, pSEASON = FALSE)
-krwflora <- krw[krw$GHPR_level == "2V1 Overige waterflora" , ] # alleen maatlat flora
+# krw <- calc_mean_EKR(db = EKRset, nyears = 22, pEAG = TRUE, pYEAR = TRUE, pSEASON = FALSE)
+# krwflora <- krw[krw$GHPR_level == "2V1 Overige waterflora" , ] # alleen maatlat flora
 
 # waterkwaliteit-------------
 # per location, given season and year
-fychem[,maand:= month(datum)]
-wq.sel <- fychem[,.(locatie,parameterid,meetwaarde,jaar,maand, EAGIDENT, KRW_SGBP3, compartiment, watertype, FEWSFILTER_ACTUEEL)]
+wq[,maand:= month(datum)]
+wq.sel <- wq[,.(locatie,parameterid,meetwaarde,jaar,maand, EAGIDENT, KRW_SGBP3, compartiment, watertype, FEWSFILTER_ACTUEEL)]
 wq.sel[,season := fifelse(maand %in% 4:10,'summer','winter')]
 # samenvoegen parameters met verschillende gerapporteerde hoedanigheid, maar waarschijnlijk zelfde methode
-wq.sel$fewsparameter <- gsub('_nf','',wq.sel$parameterid) 
+wq.sel$parameterid <- gsub('_nf','',wq.sel$parameterid) 
 # selectie relevant parameters
-wq.par <- c('Ptot_mgP_l','PO4_mgP_l',"NO3_mgN_l","Ntot_mgN_l",'NH4_mgN_l',"ZICHT_m","Cl_mg_l" ,
+wq.par <- c('Ptot_mgP_l','PO4_mgP_l',"NO3_mgN_l","Ntot_mgN_l",'NH4_mgN_l',"ZICHT_m",
+            "E_L450-610nm","Cl_mg_l" ,
            'O2_mg_l','pH','T_oC','SO4_mg_l',"SO4_mg_l","CHLFa_ug_l_spectro",
-           "CHLFa_ug_l_blauwalg" , "Ca_mg_l",
-           "Ca_mg_l",'MGETAL_mgHCO3_l',"MGETAL_mgHCO3_l_nf","Mg_mg_l","Mg_mg_l_nf","ZS_mg_l" )
+           "CHLFa_ug_l_blauwalg","SO4_mg_l",
+           "Ca_mg_l",'MGETAL_mgHCO3_l',"MGETAL_mgHCO3_l_nf","Mg_mg_l","Mg_mg_l_nf","ZS_mg_l","WATDTE_m" )
 wq.sel <- wq.sel[parameterid %in% wq.par]
-wq.sel.wide <- dcast( wq.sel,KRW_SGBP3+EAGIDENT+locatie+watertype+parameterid+season+FEWSFILTER_ACTUEEL~jaar, value.var = 'meetwaarde', fun.aggregate = mean, fill = FALSE)
+wq.sel <- unique(wq.sel)
+wq.sel<- wq.sel[,lastyear := max(jaar)]
+
+wq.sel.wide <- data.table::dcast.data.table(wq.sel, locatie+parameterid+EAGIDENT+KRW_SGBP3+FEWSFILTER_ACTUEEL+season~jaar, value.var = 'meetwaarde', fun.aggregate = mean, fill = NA, drop = TRUE)
 wq.sel.wide$nmeetjaar <- rowSums(!is.na(wq.sel.wide[,6:65]))
 
+write.table(wq.sel.wide, file = 'ZHJ_WHJ_GEM_FYCHEM.csv', sep = ';', dec = '.', row.names = FALSE)
+
 # bodem ---------------
-# selecteer monsters waar vaste bodem ondet baggerlaag is gemeten
-bodsel <- bod$monsterident[bod$fewsparameter %in% c("Ptot_mgPOlsen_l_ng","Ptot_mgPOlsen_kg_dg")]
-bod <- bod[!bod$monsterident %in% bodsel,]
-bod$fewsparameter <- gsub('_nf','',bod$fewsparameter) 
-# nalevering en ijzerval berekenen voor koppeling of ruwe data
-bod.sel.wide <- dcast(bod,locatiecode+jaar~fewsparameter, value.var = 'meetwaarde', fun.aggregate = median)
-bod.sel.wide.eag <- dcast(bod,EAGIDENT~fewsparameter, value.var = 'meetwaarde', fun.aggregate = median)
+bod.sel.wide <- dcast(bod,locatie+jaar+XCOORD+YCOORD~parameterid, value.var = 'meetwaarde', fun.aggregate = median)
+bod.sel.wide.eag <- dcast(bod,EAGIDENT~parameterid, value.var = 'meetwaarde', fun.aggregate = median)
 
 # bodemschat gewogen gemiddelde per EAG -------------------
 bodemschatAGV$oppvl <- st_area(bodemschatAGV)
@@ -155,7 +146,6 @@ aggbsgaf <- bs[, lapply(.SD, function(x) sum(x * gewichtgaf)),.SDcols = cols, by
 ```
 
 ```{r spacial join loc bod, wq and hybi}
-
 if(koppellocation){
 ## koppelen data hybi aan hybi, bod en wq ----
   # wellicht beter om dit te doen obv locaties in gefilterde datasets (EST, wqsel, bodsel)
@@ -303,7 +293,6 @@ ppr_mapPpercWatb(ret, gEAG,param = 'p_retentie')
   }
 ```
 
-
 ```{r kaarten ekr scores, include=FALSE, eval=FALSE}
 # kaart maken per eag en parameter, pdf worden geexporteerd naar output/
 # update mp-id
@@ -399,22 +388,27 @@ brpAGV$agropp <- as.numeric(st_area(brpAGV))
 brpAGV <- brpAGV[brpAGV$category %in% c('Grasland','Bouwland'),]
 brpAGV <- brpAGV %>% as.data.table()
 brpAGV <- brpAGV[,agropptot := sum(as.numeric(agropp)), by = GAFIDENT]
+brpAGV_agg <- unique(brpAGV[,c('GAFIDENT','agropptot')])
+
 #bereken relatie oppervlak agrarisch
-eag_wl <- merge(eag_wl, brpAGV[,c('GAFIDENT','agropptot')], by = 'GAFIDENT', all.x = TRUE, all.y = FALSE)
-eag_wl <- unique(eag_wl)
-eag_wl$relagr <- eag_wl$agropptot/eag_wl$OppLand
+eag_wl <- merge(eag_wl, brpAGV_agg, by.x = 'EAGIDENT', by.y = 'GAFIDENT', all.x = TRUE)
+eag_wl[,OppLand:= as.numeric(OppLand)]
+eag_wl[,relagr := agropptot/ OppLand]
+eag_wl[relagr > 0.5 & OppLand > 100000, gebiedstype := 'agrarisch']
+eag_wl[StedelijkLandelijk == 'Stedelijk', gebiedstype := 'stedelijk']
+eag_wl[relagr < 0.5 & !(StedelijkLandelijk == 'Stedelijk'), gebiedstype := 'natuur']
+eag_wl[is.na(gebiedstype), gebiedstype := 'overig']
 
 # koppel doelgat en potentie aan EAGs
-gEAG <- merge(gEAG, eag_wl[,-c('GAFNAAM')], by = 'GAFIDENT', all.x = TRUE)
-gEAG$gaf <- unlist(tstrsplit(gEAG$GAFIDENT,'-',keep=1))
-krw2 <- calc_mean_EKR(db = EKRset, nyears = 3, pEAG = TRUE, pYEAR = FALSE, pSEASON = FALSE)
+gEAG <- merge(gEAG, eag_wl[,-c("KRW_SGBP3","GAFIDENT", "GAFNAAM","SGBP3_NAAM")], by = 'EAGIDENT', all.x = TRUE)
+krw2 <- tabelEKRPerWLEnEAGPerJaar(EKRset, detail = "deel", minjaar = 2013, outdir = "./output")
 krw2flora <- krw2[krw2$GHPR_level == "2V1 Overige waterflora", ] # alleen maatlat flora
 # colsNotMerge <- as.data.table(colnames(krw2flora)[colnames(krw2flora) %in% colnames(gEAG)])
-gEAG <- merge(gEAG, krw2flora[!is.na(krw2flora$EAGIDENT), -c("watertype","KRW_SGBP3")], by.x = 'GAFIDENT', by.y ='EAGIDENT', all.x = TRUE, all.y = FALSE) 
-gEAG$doelgat <- gEAG$GEP_2022-gEAG$EKR
-potentie <- data.table::fread('../data/PotentieFlora_analDoelOvwat.csv')
-gEAG<- merge(gEAG, potentie, by.x = 'GAFIDENT', by.y ='EAGIDENT', all.x = TRUE, all.y = FALSE) 
-gEAG <- gEAG[!is.na(gEAG$GAFIDENT),] #lege EAGs verwijderen
+gEAG <- merge(gEAG, krw2flora[!is.na(krw2flora$EAGIDENT), -c("KRW_SGBP3")], by.x = 'EAGIDENT', by.y ='EAGIDENT', all.x = TRUE, all.y = FALSE) 
+gEAG$doelgat <- gEAG$GEP_2022-gEAG$EKR3jr
+potentie <- data.table::fread('./data/PotentieFlora_analDoelOvwat.csv')
+gEAG<- merge(gEAG, potentie, by.x = 'EAGIDENT', by.y ='EAGIDENT', all.x = TRUE, all.y = FALSE) 
+gEAG <- gEAG[!is.na(gEAG$EAGIDENT),] #lege EAGs verwijderen
 
 # per proces voor visualisatie --------------------
 # doelgat 
@@ -437,8 +431,8 @@ labelspot <- c('3'='>0.6', '4'='0.5-0.6','5'= '<0.5')
 
 # selectie type EAGs ----------------------------------
 #alleen agrarische EAGs
-agEAG <- gEAG[gEAG$GAFIDENT %in% brpAGV$GAFIDENT & gEAG$relagr > 0.5 & gEAG$agropptot > 100000 | gEAG$GAFIDENT %in% '2130-EAG-1',] # va 0.35 kortenhoef en sap ook
-gEAG$kaarttype[gEAG$GAFIDENT %in% brpAGV$GAFIDENT & gEAG$relagr > 0.5 & gEAG$agropptot > 100000 | gEAG$GAFIDENT %in% '2130-EAG-1'] <- 'agrarisch'
+agEAG <- gEAG[gEAG$EAGIDENT %in% brpAGV$GAFIDENT & gEAG$relagr > 0.5 & gEAG$agropptot > 100000 | gEAG$EAGIDENT %in% '2130-EAG-1',] # va 0.35 kortenhoef en sap ook
+gEAG$kaarttype[gEAG$EAGIDENT %in% brpAGV$GAFIDENT & gEAG$relagr > 0.5 & gEAG$agropptot > 100000 | gEAG$EAGIDENT %in% '2130-EAG-1'] <- 'agrarisch'
 # stedelijk
 stedEAG <- gEAG[gEAG$StedelijkLandelijk == 'Stedelijk' & !(gEAG$GAFIDENT %in% c(agEAG$GAFIDENT)),]
 gEAG$kaarttype[gEAG$StedelijkLandelijk == 'Stedelijk' & !(gEAG$GAFIDENT %in% c(agEAG$GAFIDENT))] <- 'stedelijk'
@@ -452,7 +446,7 @@ gEAG$kaarttype[gEAG$watertype %in% c('M14',"M25", "M27", "M11", "M20")] <- 'mere
 #koppel water aan eag ---------------------------------------
 gwaterpereag <- waterpereag %>% st_transform(proj4.google)
 gEAG2 <- gEAG %>% st_drop_geometry()
-watEAG <- merge(gwaterpereag, as.data.table(gEAG2), by = "GAFIDENT")
+watEAG <- merge(gwaterpereag, as.data.table(gEAG2), by.x = "GAFIDENT", by.y ="EAGIDENT")
 
 # kaarten -----------------------
 # KRW water per categorie EAGs
@@ -505,13 +499,13 @@ leaflet() %>%
   addProviderTiles("Esri.WorldGrayCanvas") 
 
 # EAGs met plassen of die afwateren op plassen
-plasgaf <- unique(gEAG$gaf[gEAG$OWMTYPE_WBP %in% c('M14',"M25", "M27", "M11", "M20")]) # selectie afvoergebieden met plassen
+plasgaf <- unique(gEAG$GAFIDENT[gEAG$OWMTYPE_WBP %in% c('M14',"M25", "M27", "M11", "M20")]) # selectie afvoergebieden met plassen
 plasgaf <- c(plasgaf, '3302','8090','8030') #toevoegen afvoergebieden die afwateren op plassen (ipv boezem)
-plaseag <- unique(gEAG$GAFIDENT[gEAG$gaf %in% plasgaf]) # EAGs in plasgafs
+plaseag <- unique(gEAG$EAGIDENT[gEAG$GAFIDENT %in% plasgaf]) # EAGs in plasgafs
 plaseag <- plaseag[!plaseag %in% c('2250-EAG-2','2250-EAG-3','2250-EAG-4','2250-EAG-5','2250-EAG-6','2250-EAG-7','2220-EAG-5','2220-EAG-6','2220-EAG-7','2550-EAG-5','2250-EAG-3','3110-EAG-5')] # weglaten EAGs die niet afwateren op plassen
 
 #& gEAG[gEAG$GAFIDENT %in% plaseag & !gEAG$GAFIDENT %in% agEAG$GAFIDENT = zonder doelgat
-plasagEAG <- agEAG[agEAG$GAFIDENT %in% plaseag,]
+plasagEAG <- agEAG[agEAG$EAGIDENT %in% plaseag,]
 paldoelgat <- colorFactor(palette = col,  domain = plasagEAG$doelgatft) 
 leaflet() %>%
   addPolygons(data = gbrpAGV,
@@ -524,26 +518,26 @@ leaflet() %>%
   addLegend("bottomright", colors=col, labels=labelsdoelgat, title = "Doelgat KRW & Overig water")%>%
   addProviderTiles("Esri.WorldGrayCanvas")  
 
-plasstedEAG <- stedEAG[stedEAG$GAFIDENT %in% plaseag,]
+plasstedEAG <- stedEAG[stedEAG$EAGIDENT %in% plaseag,]
 paldoelgat <- colorFactor(palette = col,  domain = plasstedEAG$doelgatft) 
 leaflet() %>%
   addPolygons(data = gbrpAGV,
               stroke = T, color= 'green', opacity=0.05, weight = 0.2, smoothFactor = 0.8,
               fill=T, fillColor = 'green', fillOpacity = 0.3) %>%
-  addPolygons(data = plasstedEAG, layerId = plasstedEAG$GAFIDENT,
+  addPolygons(data = plasstedEAG, layerId = plasstedEAG$EAGIDENT,
   popup= paste("EAG naam", plasstedEAG$GAFNAAM.x),
   stroke = FALSE, color= NULL, opacity= 0.8, weight = 0.5, smoothFactor = 0.8,
   fill=T, fillColor = ~paldoelgat(plasstedEAG$doelgatft), fillOpacity = 0.5) %>%
   addLegend("bottomright", colors=col, labels=labelsdoelgat, title = "Doelgat KRW & Overig water")%>%
   addProviderTiles("Esri.WorldGrayCanvas")  
 
-plasovEAG <- ovEAG[ovEAG$GAFIDENT %in% plaseag,]
+plasovEAG <- ovEAG[ovEAG$EAGIDENT %in% plaseag,]
 paldoelgat <- colorFactor(palette = col,  domain = plasovEAG$doelgatft) 
 leaflet() %>%
   addPolygons(data = gbrpAGV,
               stroke = T, color= 'green', opacity=0.05, weight = 0.2, smoothFactor = 0.8,
               fill=T, fillColor = 'green', fillOpacity = 0.3) %>%
-  addPolygons(data = plasovEAG, layerId = plasovEAG$GAFIDENT,
+  addPolygons(data = plasovEAG, layerId = plasovEAG$EAGIDENT,
   popup= paste("EAG naam", plasovEAG$GAFNAAM.x),
   stroke = FALSE, color= NULL, opacity= 0.8, weight = 0.5, smoothFactor = 0.8,
   fill=T, fillColor = ~paldoelgat(plasovEAG$doelgatft), fillOpacity = 0.5) %>%
@@ -558,7 +552,7 @@ leaflet() %>%
   addPolygons(data = gbrpAGV,
               stroke = T, color= 'green', opacity=0.05, weight = 0.2, smoothFactor = 0.8,
               fill=T, fillColor = 'green', fillOpacity = 0.3) %>%
-  addPolygons(data = agEAGdg, layerId = agEAGdg$GAFIDENT,
+  addPolygons(data = agEAGdg, layerId = agEAGdg$EAGIDENT,
     popup= paste("EAG naam", agEAGdg$GAFNAAM.x, 'potentie ',agEAGdg$potentie, 'doelgat ', agEAGdg$doelgat),
     stroke = FALSE, color= NULL, opacity= 0.8, weight = 0.5, smoothFactor = 0.8,
     fill=T, fillColor = ~palpot(agEAGdg$potentieft), fillOpacity = 0.5) %>%
@@ -575,7 +569,7 @@ col <- c('3'="blue",'4'="deepskyblue",'5'= "yellow")
 labelspot <- c('3'='>0.6', '4'='0.5-0.6','5'= '<0.5')
 
 # alleen plas, potentie en doelgat
-gEAGdg <- gEAG[gEAG$doelgat > 0.1 & gEAG$GAFIDENT %in% plaseag & !(gEAG$GAFIDENT %in% agEAG$GAFIDENT) & gEAG$relagr > 0.10 & gEAG$aggopptot > 100000,]
+gEAGdg <- gEAG[gEAG$doelgat > 0.1 & gEAG$EAGIDENT %in% plaseag & !(gEAG$EAGIDENT %in% agEAG$EAGIDENT) & gEAG$relagr > 0.10 & gEAG$agropptot > 100000,]
 palpot <- colorFactor(palette = col,  domain = gEAGdg$potentieft)
 
 leaflet() %>%
@@ -583,7 +577,7 @@ leaflet() %>%
               stroke = T, color= 'green', opacity=0.05, weight = 0.2, smoothFactor = 0.8,
               fill=T, fillColor = 'green', fillOpacity = 0.2) %>%
   addPolygons(data = gEAGdg, layerId = gEAGdg$GAFIDENT,
-    popup= paste("EAG naam", gEAGdg$GAFNAAM.x, 'potentie ',gEAGdg$potentie, 'doelgat ', gEAGdg$doelgat,'aggopp ', gEAGdg$aggopptot),
+    popup= paste("EAG naam", gEAGdg$GAFNAAM.x, 'potentie ',gEAGdg$potentie, 'doelgat ', gEAGdg$doelgat,'aggopp ', gEAGdg$agropptot),
     stroke = FALSE, color= NULL, opacity= 0.8, weight = 0.5, smoothFactor = 0.8,
     fill=T, fillColor = ~palpot(gEAGdg$potentieft), fillOpacity = 0.9) %>%
   addLegend("bottomright", colors=col, labels=labelspot, title = "Potentie")%>%
@@ -638,7 +632,7 @@ leaflet() %>%
 gEAG$prio1 <- 0;gEAG$prio1[gEAG$doelgat >= 0.1] <- 1;gEAG$prio1[gEAG$doelgat >= 0.2] <- 2
 gEAG$prio2 <- 0;gEAG$prio2[gEAG$potentie >= 0.5] <- 1;gEAG$prio2[gEAG$potentie >= 0.6] <- 2
 gEAG$prio3 <- 0;gEAG$prio3[gEAG$GAFIDENT %in% plaseag] <- 1 
-gEAG$prio4 <-0;gEAG$prio4[gEAG$GAFIDENT %in% agEAG$GAFIDENT] <- 1 
+gEAG$prio4 <-0;gEAG$prio4[gEAG$GAFIDENT %in% agEAG$EAGIDENT] <- 1 
 
 # NB doelgat is nu nergens een voorwaarde
 gEAG$priotot <- gEAG$prio1 + gEAG$prio2 + gEAG$prio3 #+ gEAG$prio4 # methode 1 zonder 4, 2 met 4 erbij
@@ -647,12 +641,12 @@ gEAG$priotot <- gEAG$prio1 + gEAG$prio2 + gEAG$prio3 #+ gEAG$prio4 # methode 1 z
 # prio <- gEAG[gEAG$prio4 > 0.9,] # methode 1, alleen agrarische EAGs
 # prio <- gEAG[gEAG$prio4 > 0.9 & gEAG$doelgat > 0.1,] # methode 1b, alleen agrarische EAGs met groot doelgat
 prio <- gEAG[gEAG$prio4 > 0.9| (gEAG$priotot > 3 & gEAG$relagr > 0.1 & gEAG$agropptot > 100000),] # methode 1a, agrarisch + bonus 
-# prio <- gEAG[gEAG$relagr > 0.1 & gEAG$aggopptot > 100000,] # methode 2, agrarisch als score 
+# prio <- gEAG[gEAG$relagr > 0.1 & gEAG$agropptot > 100000,] # methode 2, agrarisch als score 
 #stedelijk prio
-prio <- gEAG[gEAG$GAFIDENT %in% stedEAG$GAFIDENT,]
+prio <- gEAG[gEAG$EAGIDENT %in% stedEAG$EAGIDENT,]
 #overig prio
-prio <- gEAG[gEAG$GAFIDENT %in% ovEAG$GAFIDENT,]
-prio <- prio[!is.na(prio$GAFIDENT),] 
+prio <- gEAG[gEAG$EAGIDENT %in% ovEAG$EAGIDENT,]
+prio <- prio[!is.na(prio$EAGIDENT),] 
 
 binpal <- colorBin("Blues", prio$priotot, bins = 5, pretty = TRUE)
 
@@ -660,7 +654,7 @@ leaflet() %>%
   addPolygons(data = gbrpAGV,
               stroke = T, color= 'green', opacity=0.05, weight = 0.2, smoothFactor = 0.8,
               fill=T, fillColor = 'green', fillOpacity = 0.3) %>%
-  addPolygons(data = prio, layerId = prio$GAFIDENT,
+  addPolygons(data = prio, layerId = prio$EAGIDENT,
     popup= paste("EAG naam", prio$GAFNAAM, 'potentie ',prio$potentie, 'doelgat ', prio$doelgat, 'priotot ', prio$priotot),
     stroke = FALSE, color= NULL, opacity= 0.8, weight = 0.5, smoothFactor = 0.8,
     fill=T, fillColor = ~binpal(prio$priotot), fillOpacity = 0.8) %>%
@@ -671,21 +665,25 @@ leaflet() %>%
 priot <- as.data.table(prio)
 priot <-priot[, ':='(geometry = NULL)]
 write.table(priot, paste0("output/prio_agr_methode1a", Sys.Date(),".csv"), sep=";", dec=".", row.names=F)
-st_write(prio[,c( "GAFIDENT","GAFNAAM","OWMTYPE","OppEAG","OppLand","OppWater","agropptot","doelgat", "potentie", "priotot")], paste0("output/prio_agr_methode1a", Sys.Date(),".gpkg"))
-st_write(prio[,c( "GAFIDENT","GAFNAAM","OWMTYPE","OppEAG","OppLand","OppWater","agropptot","doelgat", "potentie", "priotot")], paste0("output/prio_agr_methode1a", Sys.Date(),".shp"))
+st_write(prio[,c( "EAGIDENT","GAFNAAM","OWMTYPE","OppEAG","OppLand","OppWater","agropptot","doelgat", "potentie", "priotot")], paste0("output/prio_agr_methode1a", Sys.Date(),".gpkg"))
+st_write(prio[,c( "EAGIDENT","GAFNAAM","OWMTYPE","OppEAG","OppLand","OppWater","agropptot","doelgat", "potentie", "priotot")], paste0("output/prio_agr_methode1a", Sys.Date(),".shp"))
 
 ```
 
 ```{r waterdiepte, include=FALSE, eval = FALSE}
+
+# subset gebieden
 prio <- gEAG[gEAG$prio4 > 0.9| (gEAG$priotot > 3 & gEAG$relagr > 0.1 & gEAG$agropptot > 100000),] # methode 1a, agrarisch + bonus 
 prio1 <- prio[prio$priotot > 2,] # score 3, 4, 5
 
 #waterdiepte per eag # [grepl('3360', hybi$EAGIDENT),] [grepl('3360|3302', hybi$EAGIDENT) ,]
-ppr_dieptekaart(hybi[hybi$watertype %in% c('M1a','M1b','M8',"M10","M3") & hybi$jaar > 2016,], agEAG, gbrpAGV, kansrijk = FALSE, handelperspectief = FALSE)
+ppr_dieptekaart(hybi[hybi$watertype %in% c('M1a','M1b','M8',"M10","M3") & hybi$jaar > 2016,], gebieden = gEAG, background = gbrpAGV, kansrijk = TRUE, handelperspectief = TRUE)
 #percentage kansrijke locaties: locaties waar waterdiepte < 0.35 en submerse bedekking < 30
-ppr_dieptekaart(hybi[hybi$watertype %in% c('M1a','M1b','M8',"M10","M3") & hybi$jaar > 2016,], agEAG,gbrpAGV, kansrijk = TRUE, handelperspectief = FALSE)
+ppr_dieptekaart(hybi[hybi$watertype %in% c('M1a','M1b','M8',"M10","M3") & hybi$jaar > 2016,], agEAG, background = gbrpAGV, kansrijk = TRUE, handelperspectief = FALSE)
+#waterdiepte in meters
+ppr_dieptekaart(hybi[hybi$watertype %in% c('M1a','M1b','M8',"M10","M3") & hybi$jaar > 2016,], agEAG, background =gbrpAGV, kansrijk = FALSE, handelperspectief = FALSE)
 #percentage kansrijke locaties agrarisch, niet prioritair: locaties waar waterdiepte < 0.35 en submerse bedekking < 30 en vaste bodem dieper dan 0.35 cm
-ppr_dieptekaart(hybi[hybi$watertype %in% c('M1a','M1b','M8',"M10","M3") & hybi$jaar > 2016,], gebieden = prio1,gbrpAGV,kansrijk = TRUE, handelperspectief = TRUE)
+ppr_dieptekaart(hybi[hybi$watertype %in% c('M1a','M1b','M8',"M10","M3") & hybi$jaar > 2016,], gebieden = prio1, background = gbrpAGV, kansrijk = TRUE, handelperspectief = TRUE)
 
 ```
 
@@ -694,10 +692,10 @@ agEAG$relsloot <- agEAG$OmtrekWater/agEAG$OppWater
 binpal2 <- colorBin("Blues", agEAG$relsloot, 4, pretty = FALSE)
 
 leaflet() %>%
-  addPolygons(data = gbrpAGV,popup= paste("waterlichaamnaam", gbrpAGV$GAFNAAM), stroke = F, color= 'green',
+  addPolygons(data = gbrpAGV, popup= paste("waterlichaamnaam", gbrpAGV$GAFNAAM), stroke = F, color= 'green',
               opacity=0.8, weight = 0.6, smoothFactor = 0.8,
               fill=T, fillColor = ~binpal(gbrpAGV$prio), fillOpacity = 0.9) %>%
-  addPolygons(data = agEAG[agEAG$OWMTYPE_WBP %in% c('M8',"M10"),], layerId = agEAG$GAFIDENT,popup= paste("EAG naam", agEAG$GAFNAAM.x),
+  addPolygons(data = agEAG[agEAG$OWMTYPE_WBP %in% c('M8',"M10"),], layerId = agEAG$EAGIDENT,popup= paste("EAG naam", agEAG$GAFNAAM.x),
               stroke = FALSE, color= NULL, opacity= 0.5, weight = 0.5, smoothFactor = 0.8,
               fill=T, fillColor = ~binpal2(agEAG$relsloot), fillOpacity = 0.6) %>%
   addLegend(data= agEAG, pal = binpal2, values = ~relsloot, position = "bottomright") %>%
@@ -712,10 +710,10 @@ prio <- gEAG[gEAG$prio4 > 0.9| (gEAG$priotot > 3 & gEAG$relagr > 0.1 & gEAG$agro
 prio1 <- prio[prio$priotot > 2,]
 
 krw2soorten <- krw2[krw2$GHPR %in% "Soortensamenstelling macrofyten Waterplanten", ] # alleen maatlat flora
-prio <- merge(prio, krw2soorten[!is.na(krw2soorten$EAGIDENT),c('EAGIDENT','EKR')], by.x = 'GAFIDENT', by.y ='EAGIDENT', all.x = TRUE, all.y = FALSE)
+prio <- merge(prio, krw2soorten[!is.na(krw2soorten$EAGIDENT),c('EAGIDENT','EKR')], by.x = 'EAGIDENT', by.y ='EAGIDENT', all.x = TRUE, all.y = FALSE)
 prio$EKRsoort <- prio$EKR.y
 esteag <- esteag[,yearid := frank(-jaar, ties.method = 'dense'), by = 'locatie.EAG'][yearid <= 1]
-prio <- merge(prio, esteag[!is.na(esteag$locatie.EAG),c('locatie.EAG','KROOS',"doorz_diep",'diepte', 'talud')], by.x = 'GAFIDENT', by.y ='locatie.EAG', all.x = TRUE, all.y = FALSE) 
+prio <- merge(prio, esteag[!is.na(esteag$locatie.EAG),c('locatie.EAG','KROOS',"doorz_diep",'diepte', 'talud')], by.x = 'EAGIDENT', by.y ='locatie.EAG', all.x = TRUE, all.y = FALSE) 
 
 schonen <- prio[prio$KROOS < 15 & prio$EKRsoort > 0.55 ,]#& prio$diepte > 0.35
 binpal <- colorBin("Blues", schonen$talud, bins = 7, pretty = TRUE)
@@ -724,7 +722,7 @@ leaflet() %>%
  addPolygons(data = gbrpAGV,
               stroke = T, color= 'green', opacity=0.05, weight = 0.2, smoothFactor = 0.8,
               fill=T, fillColor = 'green', fillOpacity = 0.3) %>%
-  addPolygons(data = schonen, layerId = schonen$GAFIDENT,
+  addPolygons(data = schonen, layerId = schonen$EAGIDENT,
     popup= paste("EAG naam", schonen$GAFNAAM.x, 'potentie ',schonen$potentie, 'doelgat ', schonen$doelgat, 'talud ', schonen$talud),
     stroke = FALSE, color= NULL, opacity= 0.8, weight = 0.5, smoothFactor = 0.8,
     fill=T, fillColor = ~binpal(schonen$talud), fillOpacity = 0.8) %>%
@@ -734,9 +732,10 @@ leaflet() %>%
 ```
 
 ```{r lichtklimaat, include=FALSE, eval = FALSE}
+
 prio <- gEAG[gEAG$prio4 > 0.9,] # methode 1, alleen agrarische EAGs
 
-prio <- merge(prio, esteag[!is.na(esteag$locatie.EAG),c('locatie.EAG','KROOS',"doorz_diep",'diepte')], by.x = 'GAFIDENT', by.y ='locatie.EAG', all.x = TRUE, all.y = FALSE) 
+prio <- merge(prio, esteag[!is.na(esteag$locatie.EAG),c('locatie.EAG','KROOS',"doorz_diep",'diepte')], by.x = 'EAGIDENT', by.y ='locatie.EAG', all.x = TRUE, all.y = FALSE) 
 
 binpal <- colorBin("Blues", prio$doorz_diep, bins = 7, pretty = TRUE)
 
@@ -744,29 +743,44 @@ leaflet() %>%
  addPolygons(data = gbrpAGV,
               stroke = T, color= 'green', opacity=0.05, weight = 0.2, smoothFactor = 0.8,
               fill=T, fillColor = 'green', fillOpacity = 0.3) %>%
-  addPolygons(data = prio, layerId = prio$GAFIDENT,
+  addPolygons(data = prio, layerId = prio$EAGIDENT,
     popup= paste("EAG naam", prio$GAFNAAM.x, 'potentie ',prio$potentie, 'doelgat ', prio$doelgat, 'priotot ', prio$priotot, "dooerzicht/diepte ", prio$doorz_diep),
     stroke = FALSE, color= NULL, opacity= 0.8, weight = 0.5, smoothFactor = 0.8,
     fill=T, fillColor = ~binpal(prio$doorz_diep), fillOpacity = 0.8) %>%
   addLegend(pal = binpal, values = prio$doorz_diep, position = "bottomright") %>%
   addProviderTiles("Esri.WorldGrayCanvas") 
 
+wq.sel.wide <- data.table::dcast.data.table(wq.sel, locatie+EAGIDENT+KRW_SGBP3+FEWSFILTER_ACTUEEL+season~parameterid, value.var = 'meetwaarde', fun.aggregate = mean, fill = NA, drop = TRUE)
+
+ggplot() +
+  geom_jitter(data = wq.sel.wide[`E_L450-610nm`>1,], aes(x = `E_L450-610nm`, y = ZICHT_m)) + 
+  geom_smooth(data = wq.sel.wide[`E_L450-610nm`>1,], aes(x = `E_L450-610nm`, y = ZICHT_m)) +
+  theme_minimal()+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_text(size=10), 
+    strip.text.y = element_text(size = 10), 
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size= 12),
+    axis.ticks =  element_line(colour = "black"),
+    plot.title = element_text(size =12, face="bold", hjust = 0.5),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+  )+
+  ggtitle("") +
+  labs(x= "vec",y="doorzicht")
+
 ```
 
 ```{r waterbodem, include=FALSE, eval = FALSE}
+
+# subset gebieden
 prio <- gEAG[gEAG$prio4 > 0.9,] # methode 1, alleen agrarische EAGs
 #stedelijk prio
-prio <- gEAG[gEAG$GAFIDENT %in% stedEAG$GAFIDENT,]
+prio <- gEAG[gEAG$EAGIDENT %in% stedEAG$EAGIDENT,]
 #overig prio
-prio <- gEAG[gEAG$GAFIDENT %in% ovEAG$GAFIDENT,]
-pvskp <- ppr_pmaps(dat, Overzicht_kp, hybi, nomogram, pYEAR = FALSE)
-misEAG <- gEAG[pvskp$GAF[is.na(pvskp$EAG)] %in% gEAG$gaf, c('GAFIDENT','gaf')]
-misEAG <- misEAG[!pvskp$EAG %in% misEAG$GAFIDENT,]
-
-pvskp <- merge(pvskp, misEAG, by.x = "GAF", by.y = "gaf", all = TRUE)
-pvskp$GAFIDENT[!is.na(pvskp$EAG)] <- pvskp$EAG[!is.na(pvskp$EAG)]
-
-prio <- prio[!is.na(prio$GAFIDENT),]
+prio <- gEAG[gEAG$EAGIDENT %in% ovEAG$EAGIDENT,]
+prio <- prio[!is.na(prio$EAGIDENT),]
 prio <- merge(prio, bod.sel.wide.eag, by.x = 'GAFIDENT', by.y ='EAGIDENT', all.x = TRUE, all.y = FALSE) 
 
 # bodem probleem waar PvskP < 1, want anders moet belasting eerst worden aangepakt
@@ -777,16 +791,35 @@ leaflet() %>%
  addPolygons(data = gbrpAGV,
               stroke = T, color= 'green', opacity=0.05, weight = 0.2, smoothFactor = 0.8,
               fill=T, fillColor = 'green', fillOpacity = 0.3) %>%
-  addPolygons(data = prio, layerId = prio$GAFIDENT,
-    popup= paste("EAG naam", prio$GAFNAAM.x, 'potentie ',prio$potentie, 'doelgat ', prio$doelgat, 'priotot ', prio$priotot, "dooerzicht/diepte ", prio$doorz_diep),
+ addPolygons(data = prio, layerId = prio$GAFIDENT,
+    popup= paste("EAG naam", prio$GAFNAAM.x, 'potentie ',prio$potentie, 'doelgat ', prio$doelgat, 'priotot ', prio$priotot, "doorzicht/diepte ",
+                 prio$doorz_diep),
     stroke = FALSE, color= NULL, opacity= 0.8, weight = 0.5, smoothFactor = 0.8,
     fill=T, fillColor = ~binpal(prio$doorz_diep), fillOpacity = 0.8) %>%
   addLegend(pal = binpal, values = prio$doorz_diep, position = "bottomright") %>%
   addProviderTiles("Esri.WorldGrayCanvas") 
 
+
+# bodem alle meetlocatie ondiep
+bod.sel.wide <- sf::st_as_sf(bod.sel.wide, coords = c('XCOORD','YCOORD'), crs = 28992)
+bod.sel.wide <- bod.sel.wide %>% st_transform(4326)
+bod.sel.wide <- bod.sel.wide[order(bod.sel.wide$jaar),]
+#metingen op diepte eruit halen
+bod.sel.wide <- bod.sel.wide[WATDTE_m < 6]
+
+col <- c( '1'='blue','2'='deepskyblue','3'='yellow','4'='orange','5'='salmon','6'='red','7'='darkred','8'='grey')
+labels <- c('1'="< 500",'2'="500 - 1000" ,'3'="1000 - 1500",'4'="1500 - 2500",'5'="2500-5000",'6'="5000-10000",'7'="> 10000", '8'= 'niet beschikbaar')
+pal <- colorFactor(palette = col,  domain = bod.sel.wide$Stot_mgS_kg_dg)
+
+
+leaflet() %>%
+    addCircles(data = bod.sel.wide, 
+               weight = 7, radius=40, fillOpacity = 0.8, color= ~pal(Stot_mgS_kg_dg)) %>%
+    addLegend("bottomright", colors= col, labels=labels, title = 'Ptot mgP/kg DG') %>%
+    addTiles()
+
+
 ```
-
-
 
 ```{r trendanalyse, include=FALSE, eval = FALSE}
 #*VMplassen*|*VMboezem*|
@@ -1169,5 +1202,12 @@ printestplots(estekrloc)
 ```
 
 
+```{r}
+# standard time series vis -----------
 
+ggplot()+
+  geom_boxplot(data = obtbod[parameterid %in% c("Ptot_mgP_l"   ,  "Ptot_mgP_l_nf")  ,], aes(x = as.factor(jaar), y = meetwaarde))
+# overview locs per
+obthybi[, nloc :=  uniqueN(locatie), by = 'jaar']
+```
 

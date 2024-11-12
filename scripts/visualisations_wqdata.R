@@ -384,8 +384,45 @@ KRWmapEAG <- function(gEAG, ekr_scores2, maatlat = "2V1 Overige waterflora", par
 # plot trend per EAG
 plottrendEAG <- function(gebiedData, gEAG, maatlat = "2V21 Soortensamenstelling macrofyten"){
   
-  # gebiedData <- trendekreag[trendekreag$GHPR_level == '2V21 Soortensamenstelling macrofyten',]
+  # gebiedData <- trendekreag[trendekreag$GHPR_level %in% "1F3 Aantal per volume Fytopl. - bloeisoort (01-02) Planktothrix agardhii",]
+  
   gebiedData <- gebiedData[GHPR_level %in% maatlat,]
+  '1' -> gebiedData$klasse[gebiedData$estimate < -0.3]
+  '2' -> gebiedData$klasse[gebiedData$estimate >= -0.3 & gebiedData$estimate < -0.05]
+  '3' -> gebiedData$klasse[gebiedData$estimate >= -0.05 & gebiedData$estimate < 0.05]
+  '5' -> gebiedData$klasse[gebiedData$estimate >= 0.05 & gebiedData$estimate < 0.3]
+  '6' -> gebiedData$klasse[gebiedData$estimate >= 0.3]
+  '7' -> gebiedData$klasse[gebiedData$p.value > 0.1] # geen trend
+  '8' -> gebiedData$klasse[is.na(gebiedData$p.value)] # slechts 1 of 2 jaar data
+  gebiedData$klasse[gebiedData$r.squared == 1] <- "8"
+  gebiedData$klasse <- factor(gebiedData$klasse, levels = c("1", "2", "3", "5","6","7","8"))
+  
+  col <- c('1'= 'darkred','2'="red", '3'="#fff7bc",'5'="green",'6'="darkgreen",'7' ="lightyellow",'8'="grey")
+  labels <- c('1'="< -0.3",'2'="-0.3 - -0.05" ,'3'="geen relevante trend",'5'="0.05 - 0.3",
+              '6'=">0.3",'7' ="geen significante trend",'8'="onvoldoende data")
+  pal <- colorFactor(palette = col,  domain = gebiedData$klasse)
+  
+  map <- sp::merge(gEAG, gebiedData[, c('klasse','estimate','p.value','r.squared','EAGIDENT', 'KRWwatertype.code', 'GHPR',
+                                        'GHPR_level','facet_wrap_code')], by = 'EAGIDENT', duplicateGeoms = T)
+  
+  leaflet(map) %>%
+    addPolygons(layerId = map$EAGIDENT, popup= paste("EAG naam", map$EAGNAAM, "<br>",
+                                                     "EAG code", map$EAGIDENT, "<br>",
+                                                     "EKR trend:", map$estimate, "<br>",
+                                                     "trend significantie:", map$p.value, "<br>",
+                                                     "R2:", map$r.squared, "<br>"
+    ),
+    stroke = T, color= 'black', opacity=0.8, weight = 1, smoothFactor = 0.8,
+    fill=T, fillColor = ~pal(klasse), fillOpacity = 0.6) %>%
+    addLegend("bottomright", colors = col, labels = labels, title = unique(map$GHPR))%>%
+    addProviderTiles("Esri.WorldGrayCanvas")
+  
+}
+plottrendEAG2 <- function(gebiedData, gEAG, maatlat = "Soortensamenstelling macrofyten Waterplanten"){
+  
+  # gebiedData <- trendekreag[trendekreag$GHPR_level %in% "1F3 Aantal per volume Fytopl. - bloeisoort (01-02) Planktothrix agardhii",]
+  
+  gebiedData <- gebiedData[GHPR %in% maatlat,]
   '1' -> gebiedData$klasse[gebiedData$estimate < -0.3]
   '2' -> gebiedData$klasse[gebiedData$estimate >= -0.3 & gebiedData$estimate < -0.05]
   '3' -> gebiedData$klasse[gebiedData$estimate >= -0.05 & gebiedData$estimate < 0.05]
@@ -677,10 +714,11 @@ ppr_mapPpercWatb <- function(pvskp, gEAG,param = 'p_uitspoel'){
     addLegend("bottomright", pal, values=~map[[param]], title = param) %>%
     addTiles()
 }
+
 # waterdiepte per eag
-ppr_dieptekaart<- function (hybi, gebieden = gEAG, gbrpAGV, kansrijk = TRUE, handelperspectief = TRUE){ # kaart mediane diepte per eag + slibdikte is handelingsperspectief
+ppr_dieptekaart<- function (hybi, gebieden = gEAG, background = gbrpAGV, kansrijk = TRUE, handelperspectief = TRUE){ # kaart mediane diepte per eag + slibdikte is handelingsperspectief
   
-  b <- dcast(hybi,locatie+EAGIDENT+jaar ~ parametercode, value.var = "meetwaarde", fun.aggregate = median, na.rm =TRUE, fill = NaN)
+  b <- dcast(hybi,locatie+EAGIDENT+jaar ~ parameter, value.var = "meetwaarde", fun.aggregate = median, na.rm =TRUE, fill = NaN)
   b <- b[!is.na(b$WATDTE)&!is.na(b$SUBMSPTN),]
   b$kansloc <- 0
   b$SUBMSPTN <- b$SUBMSPTN - b$FLAB
@@ -698,7 +736,7 @@ ppr_dieptekaart<- function (hybi, gebieden = gEAG, gbrpAGV, kansrijk = TRUE, han
     c <- c[order(c$kansloc),]
     c$fact <- cut(c$kansloc,  breaks = c('0','0.1','0.25','0.5','0.75','1'))
     c <- c[!is.na(c$fact),]
-    col <- c('1'= 'lightyellow','2'="yellow", '3'="deepskyblue",'4'="blue",'5'="blue")
+    col <- c('1'= 'lightyellow','2'="yellow", '3'="deepskyblue",'4'="blue",'5'="darkblue")
     labels <- c('1'="0-10%",'2'="10-25%" ,'3'="25-50%",'4'="50-75%",'5'="75-100%")
   }
   
@@ -712,7 +750,7 @@ ppr_dieptekaart<- function (hybi, gebieden = gEAG, gbrpAGV, kansrijk = TRUE, han
   
   
   # kaart waterdiepte
-  map <- sp::merge(gebieden, c, by.x = 'GAFIDENT', by.y =
+  map <- sp::merge(gebieden, c, by.x = 'EAGIDENT', by.y =
                      'EAGIDENT', all.x = FALSE, duplicateGeoms = T)
   pal <- colorFactor(palette = col,  domain = map$fact)
   
@@ -722,7 +760,7 @@ ppr_dieptekaart<- function (hybi, gebieden = gEAG, gbrpAGV, kansrijk = TRUE, han
     addPolygons(data = gbrpAGV,
                 stroke = T, color= 'green', opacity=0.05, weight = 0.2, smoothFactor = 0.8,
                 fill=T, fillColor = 'green', fillOpacity = 0.3) %>%
-    addPolygons(data = map, layerId = map$EAGIDENT, popup= paste("EAG naam", map$GAFNAAM.x, "<br>",
+    addPolygons(data = map, layerId = map$EAGIDENT, popup= paste("EAG naam", map$EAGNAAM, "<br>",
                                                                  "Diepte:", map$WATDTE, "<br>",
                                                                  "Slibdikte:", map$SLIBDTE, "<br>",
                                                                  "Percentage kansrijke locaties:", round(map$kansloc,2)*100, "<br>",
@@ -734,6 +772,7 @@ ppr_dieptekaart<- function (hybi, gebieden = gEAG, gbrpAGV, kansrijk = TRUE, han
     addProviderTiles("Esri.WorldGrayCanvas")
   
 }
+
 fractie_score_taxa <- function(l){
   # select only non aggregated scores per sample point
   l <- l[!is.na(l$CODE),] 
@@ -866,69 +905,6 @@ ppr_mapPpercWatb <- function(pvskp, gEAG,param = 'p_uitspoel'){
     addLegend("bottomright", pal, values=~map[[param]], title = param) %>%
     addTiles()
 }
-# waterdiepte per eag
-ppr_dieptekaart<- function (hybi, gebieden = gEAG, gbrpAGV, kansrijk = TRUE, handelperspectief = TRUE){ # kaart mediane diepte per eag + slibdikte is handelingsperspectief
-  
-  b <- dcast(hybi,locatie+EAGIDENT+jaar ~ parametercode, value.var = "meetwaarde", fun.aggregate = median, na.rm =TRUE, fill = NaN)
-  b <- b[!is.na(b$WATDTE)&!is.na(b$SUBMSPTN),]
-  b$kansloc <- 0
-  b$SUBMSPTN <- b$SUBMSPTN - b$FLAB
-  b$kansloc[(b$SUBMSPTN < 35|b$SUBMSPTN >75) & b$WATDTE < 0.35] <- 1 # alleen locaties waar de bedekking niet voldoet en waterdiepte te gering is
-  b$handel <- 0
-  b$handel[b$SLIBDTE + b$WATDTE > 0.35 & b$SLIBDTE > 0.05] <- 1
-  c <- b[,c('EAGIDENT','locatie','jaar','handel','kansloc','WATDTE','SUBMSPTN','SLIBDTE')]
-  
-  if(handelperspectief){
-    0 -> c$kansloc[c$handel == 0]
-  }
-  
-  if(kansrijk){
-    c <- c[,lapply(.SD, mean),.SDcols = c('handel','kansloc','WATDTE','SUBMSPTN','SLIBDTE'), by= c('EAGIDENT','jaar')]
-    c <- c[order(c$kansloc),]
-    c$fact <- cut(c$kansloc,  breaks = c('0','0.1','0.25','0.5','0.75','1'))
-    c <- c[!is.na(c$fact),]
-    col <- c('1'= 'lightyellow','2'="yellow", '3'="deepskyblue",'4'="blue",'5'="blue")
-    labels <- c('1'="0-10%",'2'="10-25%" ,'3'="25-50%",'4'="50-75%",'5'="75-100%")
-  }
-  
-  if(!kansrijk){
-    c <- c[,lapply(.SD, median),.SDcols = c('kansloc','WATDTE','SUBMSPTN','SLIBDTE'), by= c('EAGIDENT','jaar')]
-    c$fact <- cut(c$WATDTE,  breaks = c('0','0.1','0.2','0.3','0.35','0.4','0.5','1'))
-    col <- c('1'="darkred",'2'="red", '3'="tomato",'4'="salmon",'5'="lightblue",'6'="deepskyblue", '7'= 'blue')
-    labels <- c('1'="0-0.1",'2'="0.1-0.2" ,'3'="0.2-0.3",'4'="0.3-0.35",'5'="0.35-0.4",'6'="0.4-0.5",'7'="0.5-1")
-  }
-  
-  
-  
-  # kaart waterdiepte
-  map <- sp::merge(gebieden, c, by.x = 'GAFIDENT', by.y =
-                     'EAGIDENT', all.x = FALSE, duplicateGeoms = T)
-  pal <- colorFactor(palette = col,  domain = map$fact)
-  
-  map <- map[order(map$jaar),]
-  
-  leaflet() %>%
-    addPolygons(data = gbrpAGV,
-                stroke = T, color= 'green', opacity=0.05, weight = 0.2, smoothFactor = 0.8,
-                fill=T, fillColor = 'green', fillOpacity = 0.3) %>%
-    addPolygons(data = map, layerId = map$GAFIDENT, popup= paste("EAG naam", map$GAFNAAM.x, "<br>",
-                                                                 "Diepte:", map$WATDTE, "<br>",
-                                                                 "Slibdikte:", map$SLIBDTE, "<br>",
-                                                                 "Percentage kansrijke locaties:", round(map$kansloc,2)*100, "<br>",
-                                                                 "jaar:", map$jaar),
-                stroke = FALSE, color= NULL, opacity=0.5, weight = 0.5, smoothFactor = 0.8,
-                fill=T, fillColor = ~pal(map$fact), fillOpacity = 0.4) %>%
-    
-    addLegend("bottomright", colors=col, labels=labels, title = "")%>%
-    addProviderTiles("Esri.WorldGrayCanvas")
-  
-}
 
 
 
-# standard time series vis -----------
-
-ggplot()+
-  geom_boxplot(data = obtbod[parameterid %in% c("Ptot_mgP_l"   ,  "Ptot_mgP_l_nf")  ,], aes(x = as.factor(jaar), y = meetwaarde))
-# overview locs per
-obthybi[, nloc :=  uniqueN(locatie), by = 'jaar']

@@ -42,6 +42,7 @@ require(R.utils)
 
 source('./scripts/ppr_funs_waterecoinzicht.R')
 source('./scripts/import_data.R')
+source('./scripts/validation.R')
 ```
 
 ```{r algemeen data}
@@ -82,22 +83,19 @@ ekrlijst <- importKRW(inputdir = paste0("./input/", snapshot,"/rapportagefiles")
 # goals per EAG/ water body
 doelen <- data.table::fread(paste0("./input/", snapshot,'/Doelen.csv'))
 # load addition paramter/ taxa information from the aquo-kit
-sompar <- fread(paste0(workspace, 'input/domeinen_krw/Somparametersamenstelling_updated_LM.csv'), encoding = "Latin-1") 
+sompar <- fread(paste0('./input/domeinen_krw/Somparametersamenstelling_updated_LM.csv'), encoding = "Latin-1") 
 # add KRW doelen/ goals of waterbodies
 ekrlijst <- ppr_ekr(ekrlijst, doelen = doelen, sompar = sompar) 
-
 #validate ekrdata
 krw_val <- val_ekrlijst(ekrlijst)
-#remove data which is incomplete (not all EAGs within water body, too little samples)
-ekrlijst <- ekrlijst[!(KRW_SGBP3 == 'NL11_2_5' & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2008','2009','2011')),]
-ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_2_9','NL11_5_5') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2009')),]
-ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_6_1') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2010')),]
-ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_6_10') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2006','2015','2022')),]
-ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_6_11') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2007')),]
-ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_6_2') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2022')),]
-ekrlijst <- ekrlijst[!(KRW_SGBP3 %in% c('NL11_6_6') & facet_wrap_code == 'Ov. waterflora' & jaar %in% c('2015')),]
+# filter only eags were watertype is correct
+ekrlijst <- ekrlijst[paste0(EAGIDENT,KRWwatertype.code) %in% unique(paste0(EAG$EAGIDENT,EAG$OWMTYPE))]
+# Botshol 2011 waar zijn monsters eag 2 gebleven?
+# stichts ankeveen 2006 idem?
+# vinkeveen eag 3 in 2006 weg?
 # Kievitsbuurt 2006 en 2010 mist
 # SAP, 3201-EAG-2 mist tm 2012: mogelijk omdat er alleen OW en geen EZ locaties zijn? 
+# OBT en het hol check
 
 saveRDS(ekrlijst, file= paste0("./data/krw/ekrlijst",".rds"))
 EKRset <- ekrlijst[Hoedanigheid.code == 'EKR',]
@@ -109,8 +107,8 @@ EKRset <- ekrlijst[Hoedanigheid.code == 'EKR',]
 ```{r}
 # Preprocess EAG data -----------------------------------------------------
 # Load base layer with EAGs 
-EAG <- st_read(paste0('./input/20230803/gebiedsinfo/EAG_20220809.shp')) %>% st_transform(28992)
-setnames(EAG,c("Code" ,"Naam","Soort","Oppervlakt","Omschrijvi" ,"Opmerking" , "Wtype_BR"  , "Wtype_WBP",  "geometry"),
+EAG <- st_read(paste0('./input/',snapshot,'/gebiedsinfo/EAGS_met_wateroppervlaktes/EAGs_met_wateroppervlaktes.shp')) %>% st_transform(28992)
+setnames(EAG,c("GAFIDENT" ,"Naam","Soort","Opp_EAG","Omschr" ,"Opmerking" , "Wtype_BR"  , "Wtype_Vast",  "geometry"),
          c("EAGIDENT" ,"EAGNAAM","Soort", "EAGOPPVL", "OSMOMSCH" ,"OPMERKINGE" , "OWMTYPE"  , "OWMTYPE_WBP",  "geometry"))
 EAG <- setDT(EAG)
 # add GAF/ aan afvoergebied code
@@ -150,6 +148,10 @@ EAG[, GAFNAAM_trim := gsub(" ", "", GAFNAAM, fixed = TRUE)]
 EAG<- EAG[!GAFNAAM == 'Geen EAG',]
 EAG<- EAG[!GAFNAAM == '3???',]
 EAG <- st_as_sf(EAG) %>% st_transform(28992)
+
+# merge EAG with KRW
+EAG <- merge(EAG, eag_wl[, c('EAGIDENT','KRW_SGBP3','KRWmonitoringslocatie_SGBP3','SGBP3_NAAM')], by = 'EAGIDENT', all.x = TRUE)
+
 st_write(EAG, paste0('./data/', '/EAG.gpkg'), append = FALSE)
 setDT(EAG)
 
@@ -161,6 +163,8 @@ checkEAG_loc <- EAG[!EAGIDENT %in% unique(locaties$EAGIDENT),]
 checkEAG <- eag_wl[!EAGIDENT %in% unique(EAG$EAGIDENT),]
 #check if all EAGs in locaties are in EAG
 checkEAG <- EAG[!EAGIDENT %in% unique(eag_wl$EAGIDENT),]
+
+
 ```
 
 
@@ -189,9 +193,9 @@ saveRDS(hybi, file = './data/hybi.rds')
 
 ```{r import fychem}
 #import chemical data
-fychem <- import_wqdata(path = paste0('./input/', snapshot, '/fychem/'), location = locaties, parameter = parameter, pattern = c('.txt','.csv'))
+fychem <- import_wqdata(path = paste0('./input/', snapshot, '/fychem/'), location = locaties, parameter = parameter, pattern = '.txt|.csv')
 # post process chemical data (take only relevant categories, which differs for each type of analysis) 4 use in atlas_toestand
-fychem <- ppr_wqdata(fychem, syear = 1900, srow = c("HYBIO","IONEN","NUTRI","ALG","VELD","ALGEN","LICHT","MONSVAR","METAL","NUTRI_KRWTOETS","ALG_KRWTOETS","ALGEN_KRWTOETS","HYBIO_KRWTOETS","KRWTOETS","IONEN_KRWTOETST", "VELD_KRWTOETST"))
+fychem <- ppr_wqdata(fychem, syear = 1900, srow = c("HYBIO","IONEN","NUTRI","ALG","VELD","ALGEN","LICHT","REST","MONSVAR","METAL","NUTRI_KRWTOETS","ALG_KRWTOETS","ALGEN_KRWTOETS","HYBIO_KRWTOETS","KRWTOETS","IONEN_KRWTOETST", "VELD_KRWTOETST"))
 fychem  <- fychem[!meetwaarde == -999,]
 fychem[parameterid == "Ntot_mgN_l_nf", parameterid:= "Ntot_mgN_l"]
 # write hybi.rds
@@ -230,11 +234,12 @@ In onderstaande code wordt de output geaggregeerd naar gemiddelden ekr per gebie
 # Actueel = LAATSTE 3 beschikbare meetjaren in periode 2011 tm 2021 (meeste recente beschikbare gegevens)
 # Referentietoestand = de EERSTE 3 beschikbare meetjaren in de periode 2006 tm 2013 (gelijk aan referentie voor overige wateren)
 ekr_scores <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR',], detail = "deel", minjaar = 2012, outdir = "./output")
+
 # Einde planperiode 1 = LAATSTE 3 beschikbare meetjaren in periode 2003 tm 2014 (gelijk aan Toestand 2015 factsheets in WKP*) -2009tm2015
 ekr_scores_wbp1 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2005 & jaar < 2015,], detail = "deel", minjaar = 2004, outdir = "./output")
 # Einde planperiode 2 = LAATSET 3 beschikbare meetjaren in periode 2010 tm 2020 (gelijk aan Toestand 2021 factsheets in WKP*) -2016tm2021
 ekr_scores_wbp2 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2014 & jaar < 2021,], detail = "deel", minjaar = 2010, outdir = "./output")
-ekr_scores_wbp3 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2019 & jaar < 2027,], detail = "deel", minjaar = 2012, outdir = "./output")
+ekr_scores_wbp3 <- tabelEKRPerWLEnEAGPerJaar(ekrlijst[Hoedanigheid.code == 'EKR' & jaar > 2020 & jaar < 2027,], detail = "deel", minjaar = 2012, outdir = "./output")
 
 # aggregated waterbody scores for app and atlas toestand
 ekr_scores1 <- ekr_scores[aggregated == 'ja', ] # alleen gewogen scores selecteren
@@ -258,7 +263,7 @@ Per (deel)maatlat en ecologisch analysegebied is een lineaire trend in EKR-score
 ```{r krwtrends}
 # bereken trend per EAG
 trendekr.eag <- trendkrw(ekrlijst[Hoedanigheid.code == 'EKR',]) 
-trendekr.eag <- merge(ekr_scores, trendekr.eag, by = c('EAGIDENT','KRW_SGBP3',"waterlichaam",'KRWwatertype.code','aggregated','facet_wrap_code','GHPR', 'level' ,'GHPR_level', "GEP_2022"))
+trendekr.eag <- merge(ekr_scores, trendekr.eag, by = c('EAGIDENT','KRW_SGBP3','KRWwatertype.code','aggregated','facet_wrap_code','GHPR', 'level' ,'GHPR_level', "GEP_2022"))
 write.table(trendekr.eag, file = paste("./output/trendekr.eag",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
 # select only aggregated scores per waterbody/ toetsgebied - trends are calculated based on total average scores per waterbody, NB. individual samples are not used for trends
 ekrtrend <- trendekr.eag[aggregated == 'ja' & level == 1,] 
@@ -271,6 +276,7 @@ saveRDS(ekrtrendeag, file = './data/krw/ekrtrendeag.rds')
 
 ekrtrendbeschrijving <- beschrijvingtrend(ekrtrendeag)
 saveRDS(ekrtrendbeschrijving, file = './data/krw/ekrtrendbeschrijving.rds')
+write.table(ekrtrendbeschrijving, file = paste("./output/trendekr.eag",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
 
 ```
 
@@ -415,6 +421,7 @@ esteag <- EST_aggeag(estloc)
 esteag <- EST_addnameeag(esteag, EST_omschrijving, eag_wl)
 saveRDS(esteag, file = './data/esteag.rds')
 # esteag <- readRDS('./data/esteag.rds')
+write.table(esteag, paste0("output/esteag_", Sys.Date(),".csv"), sep=";", dec=".", row.names=F)
 
 # add toestandbeschrijving per EAG
 wqmeanEAG <- calcMeanWq(wq.sel = fychem, nyears = 5, smonth = 4:9, pEAG = TRUE, pYEAR = TRUE, pSEASON = FALSE)

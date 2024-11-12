@@ -138,8 +138,8 @@ make_map_pie <- function(pl, dt, bkpl = NULL,
                          label_type = c("Fytoplankton", "Overige waterflora", "Macrofauna", "Vis")){
   
   # make copy
-  dt <- copy(dt) # dt <- copy(ekr_scores1) 
-  pl <- copy(pl) # pl <- copy(gKRW)
+  dt <- copy(dt) # dt <- copy(ekr_scores1[ekr_scores1$level == 1,]) 
+  pl <- copy(pl) # pl <- copy(KRW)
   
   # change column names
   setDT(pl)
@@ -154,7 +154,9 @@ make_map_pie <- function(pl, dt, bkpl = NULL,
   }
   
   ## Dissolve polygons with same area IDs ---------
-  pl <- pl %>% dplyr::group_by(areaID_pl) %>% dplyr::summarize()
+  pl <- st_cast(pl, "POLYGON")
+  pl <- pl %>% dplyr::group_by(areaID_pl) %>% dplyr::summarize('geom')
+  pl <- pl[!is.na(pl$areaID_pl),]
   
   
   ## Join Data table to map ----
@@ -168,9 +170,12 @@ make_map_pie <- function(pl, dt, bkpl = NULL,
                  areaID_dt ~  type_krw,
                  fun.aggregate = last,
                  value.var = 'ekrval', fill=NA)
+  
   #print(paste0(names(dt_dc)[-1], " are changed to cat", 1:4))
   setnames(dt_dc, old = names(dt_dc),
            new = c( "areaID_dt", "cat1", "cat2", "cat3", "cat4"))
+  
+  
   if(ekr_fac ==FALSE){
     # when EKR variable is numerical, convert it to integer (1:4)
     dt_dc[,  cat1 := as.integer(cut(cat1, ekr_breaks[1,], labels = 1:4))]
@@ -181,6 +186,7 @@ make_map_pie <- function(pl, dt, bkpl = NULL,
   # join
   setDT(pl)
   pl <- merge(pl,dt_dc, by.x = "areaID_pl", by.y = "areaID_dt", all.x = TRUE)
+  pl <- pl[!areaID_pl =="",]
   
   
   # Compute minimum EKR value 
@@ -213,6 +219,7 @@ make_map_pie <- function(pl, dt, bkpl = NULL,
   
   # Araw background polygon
   if(!is.null(bkpl)){
+    bkpl<- st_as_sf(bkpl)
     gpbk <- ggplot() + geom_sf(data = bkpl, fill = alpha("white", alpha = 0), col = "gray") 
   } else {
     gpbk <- ggplot() 

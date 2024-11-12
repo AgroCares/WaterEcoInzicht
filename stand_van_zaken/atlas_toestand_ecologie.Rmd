@@ -42,8 +42,8 @@ library(htmlwidgets)#savewidget
 require(webshot)
 
 
-source("../scripts/fun_map_pie.R")
-source('../scripts/visualisations_wqdata.R')
+source("./scripts/fun_map_pie.R")
+source('./scripts/visualisations_wqdata.R')
 
 # other settings
 col <- c('3'="blue",'4'="green",'5'="yellow",'6'="orange",'7'="red")
@@ -53,45 +53,45 @@ setwd("C:/Users/laura/Documents/WaterEcoInzicht/stand_van_zaken")
 ```
 
 ```{r data, include = FALSE}
-
 ## data voor kaart ----------  
-gEAG <- st_read("../data/EAG.gpkg") %>% st_transform(4326)
+gEAG <- st_read("./data/EAG.gpkg") %>% st_transform(4326)
 gEAG$watertype <- NULL
 EAG <- gEAG %>% st_transform(28992)
-gKRW <- st_read(paste0("../input/", snapshot, "/gebiedsinfo/WBPKRW20200525.gpkg"))%>% st_transform(4326)
+
+gKRW <- st_read(paste0("./input/", snapshot, "/gebiedsinfo/WBPKRW20200525.gpkg"))%>% st_transform(4326)
 KRW <- gKRW %>% st_transform(28992)
 ## aanvullende eag data, krwwatertype niet overal ingevuld en stedelijk landelijk voor EST
 ## let op: als nieuwe EAG (gEAG) dan deze tabel aanpassen en aanvullen
-eag_wl <- fread(paste0("../input/", snapshot, '/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv'))
+eag_wl <- fread(paste0("./input/", snapshot, '/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv'))
 eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
 eag_wl$EAGIDENT <- eag_wl$GAFIDENT
 
 # domain TWN codes, addiotional information on taxa
-TWNev <- read_excel('../input/TwnList_2019-07-19.xlsx')
+TWNev <- read_excel('./input/TwnList_2019-07-19.xlsx')
 # data hybi
-hybi <- readRDS('../data/hybi.rds') %>% as.data.table()
+hybi <- readRDS('./data/hybi.rds') %>% as.data.table()
 
 # KRW toetsgegevens
-ekrlijst <- readRDS('../data/krw/ekrlijst.rds') %>% as.data.table()
+ekrlijst <- readRDS('./data/krw/ekrlijst.rds') %>% as.data.table()
 EKRset <- ekrlijst[Hoedanigheid.code == 'EKR',]
-trendekreag <- readRDS('../data/krw/trendekreag.rds')  %>% as.data.table() #alle trends per EAG
+trendekreag <- readRDS('./data/krw/trendekreag.rds')  %>% as.data.table() #alle trends per EAG
 trendekreag$facet_wrap_code <- gsub("Ov. waterflora", "Waterflora", trendekreag$facet_wrap_code)
-ekrtrend <- readRDS('../data/krw/ekrtrend.rds') %>% as.data.table() #alleen hoofd, gewogen (dus niet per meetlocatie)
+ekrtrend <- readRDS('./data/krw/ekrtrend.rds') %>% as.data.table() #alleen hoofd, gewogen (dus niet per meetlocatie)
 ekrtrend$facet_wrap_code <- gsub("Ov. waterflora", "Waterflora", ekrtrend$facet_wrap_code)
-ekrtrendeag <- readRDS('../data/krw/ekrtrendeag.rds')  %>% as.data.table() #alleen hoofdmaatlat
+ekrtrendeag <- readRDS('./data/krw/ekrtrendeag.rds')  %>% as.data.table() #alleen hoofdmaatlat
 ekrtrendeag$facet_wrap_code <- gsub("Ov. waterflora", "Waterflora", ekrtrendeag$facet_wrap_code)
 
-tabset <- readRDS('../data/krw/ekr_scores.rds') %>% as.data.table()
-tabsetwbp1 <- readRDS('../data/krw/ekr_scores_wbp1.rds') %>% as.data.table()
-tabsetwbp2 <- readRDS('../data/krw/ekr_scores_wbp2.rds') %>% as.data.table()
-tabsetwbp3 <- readRDS('../data/krw/ekr_scores_wbp3.rds') %>% as.data.table()
+tabset <- readRDS('./data/krw/ekr_scores.rds') %>% as.data.table()
+tabsetwbp1 <- readRDS('./data/krw/ekr_scores_wbp1.rds') %>% as.data.table()
+tabsetwbp2 <- readRDS('./data/krw/ekr_scores_wbp2.rds') %>% as.data.table()
+tabsetwbp3 <- readRDS('./data/krw/ekr_scores_wbp3.rds') %>% as.data.table()
 
 # aggregated waterbody scores
-ekr_scores1 <- readRDS('../data/krw/ekr_scores1.rds') %>% as.data.table()
-ekr_scores2 <- readRDS('../data/krw/ekr_scores2.rds') %>% as.data.table()
+ekr_scores1 <- readRDS('./data/krw/ekr_scores1.rds') %>% as.data.table()
+ekr_scores2 <- readRDS('./data/krw/ekr_scores2.rds') %>% as.data.table()
 
 # data water quality
-wq <- readRDS('../data/fychem.rds') %>% as.data.table()
+wq <- readRDS('./data/fychem.rds') %>% as.data.table()
 
 # data P loads (to do: create and export this data in ppr script)
 # pvskp <- readRDS('../data/pvskp.rds') %>% as.data.table()
@@ -126,8 +126,8 @@ Onderdeel van het beoordelen is het toetsen. Hierbij wordt bepaald hoe een toets
 # 
 # 
 # # Make a map with pie chart (based on the numerical variable "EKR") and save as JPEG
-# gp_c <- draw_map(KRW, ekr_scores1, bkpl = EAG,
-#                  col_ekr = "EKR", ekr_fac = FALSE,
+# gp_c <- draw_map(KRW, ekr_scores1[ekr_scores1$level == 1,], bkpl = EAG,
+#                  col_ekr = "EKR3jr", ekr_fac = FALSE,
 #                  col_area_sf = "OWMIDENT", col_area_dt = "KRW_SGBP3",
 #                  ekr_breaks = ekr_breaks,
 #                  filename = "map_EKR_waterlichaam.jpg")
@@ -165,7 +165,7 @@ Voor de jaarlijkse rapportage over de stand van zaken wordt het verschil tussen 
 
 In de kaarten hieronder zijn dezelfde perioden gebruikt als voor de formele rapportage van de toestand 2015, 2021 en 2023. In de formele toetsing worden de laatste drie meetjaren gebruikt om te komen tot een periodeoordeel en de gebruikte gegevens mogen maximaal 10 jaar vóór het rapportagejaar zijn verzameld. Hierdoor kunnen de gebruikte data voor verschillende periodeoordelen overlappen en worden verschillen tussen planperioden minder goed zichtbaar. Daarom is er in deze rapportage voor gekozen om de laatste 3 meetjaren in niet overlappende tijdsintervallen te gebruiken voor een periodeoordeel.
 
-```{r verschilkaart1, fig.cap = "Verschil tussen de ecologische kwaliteit van waterplanten sinds de start van de monitoring (gebaseerd op metingen 2006 t/m 2013) en de drie meest recente meetjaren (2020 t/m 2022).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%'}
+```{r verschilkaart1, fig.cap = "Verschil tussen de ecologische kwaliteit van waterplanten sinds de start van de monitoring (gebaseerd op metingen 2006 t/m 2013) en de drie meest recente meetjaren (2021 t/m 2023).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%'}
 # difference between most recent (wbp3) and reference (2006-2013)
 wbp03 <- merge(tabsetwbp3[,c('EAGIDENT','KRW_SGBP3','GHPR_level', 'EKR3jr')], tabset, by = c('EAGIDENT','KRW_SGBP3','GHPR_level'))
 wbp03$verschil <- wbp03$EKR3jr.x - wbp03$EKRref
@@ -215,7 +215,7 @@ leaflet() %>%
 ```
 
 
-```{r verschilkaart2, fig.cap = "Verschil tussen de ecologische kwaliteit van de waterplanten aan het einde van de planperiode van SGBP2 (gebaseerd op metingen 2015 t/m 2020) en de drie meest recente meetjaren (2020 t/m 2022).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%'}
+```{r verschilkaart2, fig.cap = "Verschil tussen de ecologische kwaliteit van de waterplanten aan het einde van de planperiode van SGBP2 (gebaseerd op metingen 2015 t/m 2020) en de drie meest recente meetjaren (2021 t/m 2022).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%'}
 
 # difference between end wbp2 (2021 - data up 2 2020) and most recent
 wbp23 <- merge(tabsetwbp3[,c('EAGIDENT','KRW_SGBP3','GHPR_level', 'EKR3jr')], tabsetwbp2, by = c('EAGIDENT','KRW_SGBP3','GHPR_level'))
@@ -260,7 +260,7 @@ leaflet() %>%
               fill=T, fillColor = ~pal(param), fillOpacity = 0.6) %>%
   addLegend("bottomright", colors = col1, 
             labels= labels1,
-            title = 'Verschil toestand 2021 en toestand 2023')%>%
+            title = 'Verschil toestand 2021 en toestand 2024')%>%
   addProviderTiles("Esri.WorldGrayCanvas")#addTiles()
 
 
@@ -269,10 +269,11 @@ leaflet() %>%
 ```
 
 
-```{r verschilkaart3, fig.cap = "Verschil tussen de ecologische kwaliteit van waterplanten sinds de start van de monitoring (gebaseerd op metingen 2006 t/m 2013) en het einde van de planperiode van SGBP1 (gebaseerd op metingen 2006 t/m 2014).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%'}
+```{r verschilkaart3, fig.cap = "Verschil tussen de ecologische kwaliteit van waterplanten van het einde van de planperiode van SGBP1 (gebaseerd op metingen 2006 t/m 2014) en planperiode SGBP2 (gebaseerd op metingen tussen 2015 t/m 2020).", echo = FALSE, message = FALSE, warning = FALSE, out.width='100%'}
 
-# difference between end wbp1 (2015 - data up 2 2014) and reference (2006-2013)
-tabsetwbp1$verschil <- tabsetwbp1$EKR3jr - tabsetwbp1$EKRref
+# difference between end wbp2 (2021 - data up 2 2020) and most recent
+wbp12 <- merge(tabsetwbp2[,c('EAGIDENT','KRW_SGBP3','GHPR_level', 'EKR3jr')], tabsetwbp1, by = c('EAGIDENT','KRW_SGBP3','GHPR_level'))
+wbp12$verschil <- wbp23$EKR3jr.x - wbp23$EKR3jr.y
 
 # maak verschillenkaart
 maatlat <- "2V1 Overige waterflora"
@@ -312,6 +313,37 @@ leaflet() %>%
             title = 'Verschil toestand 2015 en referentietoestand')%>%
   addProviderTiles("Esri.WorldGrayCanvas")#addTiles()
 
+
+
+
+```
+
+```{r add trendindicators for percentage}
+trendekreag$trend <- 'kloptniet'
+setDT(trendekreag)
+
+trendekreag[p.value < 0.1 &  r.squared < 1 & estimate <= -0.05 & !is.na(estimate), trend := 'negatief']
+trendekreag[p.value < 0.1 &  r.squared < 1 & estimate >= 0.05 & !is.na(estimate), trend := 'positief']
+trendekreag[p.value < 0.1 &  r.squared < 1 & estimate > -0.05 & estimate < 0.05 & !is.na(trendekreag$estimate), trend := 'neutraal']
+trendekreag[(p.value >= 0.1 | r.squared >= 1 | is.na(estimate) | is.na(p.value) | is.na(r.squared)), trend := 'onbekend']
+
+# trend all
+round(nrow(trendekreag[trend == 'positief' ])/nrow(trendekreag) * 100, 0)
+round(nrow(trendekreag[trend == 'negatief' ])/nrow(trendekreag) * 100, 0)
+round(nrow(trendekreag[trend == 'neutraal' ])/nrow(trendekreag) * 100, 0)
+round(nrow(trendekreag[trend == 'onbekend' ])/nrow(trendekreag) * 100, 0)
+
+# trend '2V3 Bedekking som submerse planten en draadalgen'
+round(nrow(trendekreag[trend == 'positief' & GHPR_level == '2V3 Bedekking som submerse planten en draadalgen'])/nrow(trendekreag[GHPR_level == '2V3 Bedekking som submerse planten en draadalgen']) * 100, 0)
+round(nrow(trendekreag[trend == 'negatief' & GHPR_level == '2V3 Bedekking som submerse planten en draadalgen'])/nrow(trendekreag[GHPR_level == '2V3 Bedekking som submerse planten en draadalgen']) * 100, 0)
+round(nrow(trendekreag[trend == 'neutraal' & GHPR_level == '2V3 Bedekking som submerse planten en draadalgen'])/nrow(trendekreag[GHPR_level == '2V3 Bedekking som submerse planten en draadalgen']) * 100, 0)
+round(nrow(trendekreag[trend == 'onbekend' & GHPR_level == '2V3 Bedekking som submerse planten en draadalgen'])/nrow(trendekreag[GHPR_level == '2V3 Bedekking som submerse planten en draadalgen']) * 100, 0)
+
+# trend "2V21 Soortensamenstelling macrofyten"
+round(nrow(trendekreag[trend == 'positief' & GHPR_level == "2V21 Soortensamenstelling macrofyten"])/nrow(trendekreag[GHPR_level == "2V21 Soortensamenstelling macrofyten"]) * 100, 0)
+round(nrow(trendekreag[trend == 'negatief' & GHPR_level == "2V21 Soortensamenstelling macrofyten"])/nrow(trendekreag[GHPR_level == "2V21 Soortensamenstelling macrofyten"]) * 100, 0)
+round(nrow(trendekreag[trend == 'neutraal' & GHPR_level == "2V21 Soortensamenstelling macrofyten"])/nrow(trendekreag[GHPR_level == "2V21 Soortensamenstelling macrofyten"]) * 100, 0)
+round(nrow(trendekreag[trend == 'onbekend' & GHPR_level == "2V21 Soortensamenstelling macrofyten"])/nrow(trendekreag[GHPR_level == "2V21 Soortensamenstelling macrofyten"]) * 100, 0)
 
 
 
@@ -439,6 +471,7 @@ combineWidgets(
 
 # saveWidget(krw, "waterflorapermpjaar.html", selfcontained = FALSE)
 #webshot("waterflora.html", file = "waterflora.png")
+
 ```
 
 De ontwikkeling van de ecologische kwaliteit is met een lineaire trend. Uit deze trends in de toestand van waterkwaliteit blijkt dat op veel plaatsen de vegetatie (overige waterflora) achteruit gaat. In `r round((length(ekrtrendeag$estimate[ekrtrendeag$GHPR_level == '2V1 Overige waterflora' & ekrtrendeag$estimate < 0 & !is.na(ekrtrendeag$estimate)])/length(ekrtrendeag$estimate[ekrtrendeag$GHPR_level == '2V1 Overige waterflora']))*100, 0)`% van de gebieden is met een hoge betrouwbaarheid vast te stellen dat ze achteruit zijn gegaan op de maatlat overige waterflora.
@@ -450,11 +483,12 @@ In `r round((length(ekrtrendeag$estimate[ekrtrendeag$GHPR_level == '2V1 Overige 
 ```{r trendveg1, fig.cap = 'Overzicht van de trend in EKR scores op de maatlat overige waterflora per ecologisch analysegebied tussen 2006 en 2021', echo = FALSE, message = FALSE, warning = FALSE, out.width="100%", fig.show='hold'}
 
 plottrendEAG(trendekreag, gEAG, maatlat = "2V21 Soortensamenstelling macrofyten")
+
 # krw<-
 combineWidgets(
   ncol = 2, colsize = c(1,1),
-  plottrendEAG(trendekreag, gEAG,maatlat = "2V3 Soortensamenstelling macrofyten Oeverplanten"),
-  plottrendEAG(trendekreag, gEAG, maatlat = "2V3 Soortensamenstelling macrofyten Waterplanten")
+  plottrendEAG2(trendekreag, gEAG,maatlat = "Soortensamenstelling macrofyten Oeverplanten"),
+  plottrendEAG2(trendekreag, gEAG, maatlat = "Soortensamenstelling macrofyten Waterplanten")
 )
 
 plottrendEAG(trendekreag, gEAG, maatlat = c("2V22 Abundantie groeivormen macrofyten"))
@@ -472,7 +506,7 @@ combineWidgets(
 
 In `r round((length(trendekreag$estimate[trendekreag$GHPR_level == '2V21 Soortensamenstelling macrofyten' & (trendekreag$estimate < 0| is.na(trendekreag$estimate))])/length(trendekreag$estimate[trendekreag$GHPR_level == '2V21 Soortensamenstelling macrofyten']))*100, 0)`% van de gebieden is met een hoge betrouwbaarheid vast te stellen dat ze achteruit zijn gegaan op de indicator soortensamenstelling macrofyten.
 
-In `r round((length(trendekreag$estimate[trendekreag$GHPR_level == '2V3 Bedekking som submerse planten en draadalgen' & (trendekreag$estimate < 0| is.na(trendekreag$estimate))])/length(trendekreag$estimate[trendekreag$GHPR_level == '2V3 Bedekking som submerse planten en draadalgen']))*100, 0)`% van de gebieden is met een hoge betrouwbaarheid vast te stellen dat ze achteruit zijn gegaan op de indicator bedekking submerse planten.
+In `r round((length(trendekreag$estimate[trendekreag$GHPR_level == '2V3 Bedekking som submerse planten en draadalgen' & trendekreag$p.value > 0.1 &  trendekreag$r.squared < 1 & trendekreag$estimate < 0.05)])/length(trendekreag$estimate[trendekreag$GHPR_level == '2V3 Bedekking som submerse planten en draadalgen']))*100, 0)`% van de gebieden is met een hoge betrouwbaarheid vast te stellen dat ze achteruit zijn gegaan op de indicator bedekking submerse planten.
 
 In `r round((length(trendekreag$estimate[trendekreag$GHPR == 'Soortensamenstelling macrofyten Waterplanten' & (trendekreag$estimate < 0| is.na(trendekreag$estimate))])/length(trendekreag$estimate[trendekreag$GHPR == 'Soortensamenstelling macrofyten Waterplanten']))*100, 0)`% van de gebieden is met een hoge betrouwbaarheid vast te stellen dat ze achteruit zijn gegaan op de indicator soortensamenstelling waterplanten in sloten.
 
@@ -514,8 +548,8 @@ wq1 <- wq[grepl('VAST*', wq$MEETNET_HISTORIE),]
 #chlfa<-
 combineWidgets(
   ncol = 2, colsize = c(1, 1),
-  chlorofylA(wq1[wq1$jaar < '2015'& wq1$jaar > '2005',], gEAG),
-  chlorofylA(wq1[wq1$jaar > '2014'& wq1$jaar < '2022',], gEAG)
+  chlorofylA(wq1[jaar < 2016& wq1$jaar > 2005,], gEAG),
+  chlorofylA(wq1[wq1$jaar > '2015'& wq1$jaar < '2025',], gEAG)
 )
 #saveWidget(chlfa, "chlfa.html", selfcontained = FALSE)
 #webshot("chlfa.html", file = "chlfa.png")
@@ -556,9 +590,9 @@ In `r round((length(ekrtrendeag$estimate[ekrtrendeag$GHPR_level == '1F1 Fytoplan
 #krw<-
 combineWidgets(
   ncol = 3,
-  plottrendEAG(trendekreag, gEAG, maatlat = "Fytoplankton-kwaliteit"),
-  plottrendEAG(trendekreag, gEAG, maatlat = "Abundantie fytoplankton"   ),
-  plottrendEAG(trendekreag, gEAG, maatlat = "Soortensamenstelling fytoplankton")
+  plottrendEAG(trendekreag, gEAG, maatlat = "1F1 Fytoplankton-kwaliteit"),
+  plottrendEAG(trendekreag, gEAG, maatlat = "1F2 Abundantie fytoplankton"   ),
+  plottrendEAG(trendekreag, gEAG, maatlat = "1F2 Abundantie fytoplankton")
 )
 # saveWidget(krw, "trenddeelmtltfyto.html", selfcontained = FALSE)
 # webshot("trendbiodivwaterflora.html", file = "trendbiodivwaterflora.png")

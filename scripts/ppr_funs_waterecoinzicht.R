@@ -35,7 +35,7 @@ ppr_wqdata <- function(fychem, syear = 1980, srow = c("IONEN","NUTRI","ALG","VEL
 }
 
 # pre process EKR information by adding names for filtering
-ppr_ekr <- function(db, doelen){
+ppr_ekr <- function(db, doelen, sompar = sompar){
   
   # combine both EKR from KRW and overig water into one data.table
   db$jaar <- as.numeric(db$jaar) 
@@ -52,9 +52,11 @@ ppr_ekr <- function(db, doelen){
   
   # mean GEP per id  
   doelgeb <- doelen[,.(GEP_2022 = mean(Doel_2022,na.rm=TRUE)), by =.(GeoObject.code, gebied, brondoel_2022, GHPR, Waardebepalingsmethode)]
-  doelgeb[, waterlichaam_code := fifelse(!(is.na(GeoObject.code)|GeoObject.code == ""), GeoObject.code, gebied)]
+  doelgeb <- doelgeb[, waterlichaam_code := as.character(fifelse(!(is.na(GeoObject.code)|GeoObject.code == ""), GeoObject.code, gebied))]
   
   # merge with doelen & db
+  db[,waterlichaam_code := as.character(waterlichaam_code)]
+  db[,facet_wrap_code := as.character(facet_wrap_code)]
   db <- merge(db, doelgeb[,c('waterlichaam_code','Waardebepalingsmethode','GEP_2022')], by.x = c('waterlichaam_code','facet_wrap_code'), by.y = c('waterlichaam_code','Waardebepalingsmethode'), all.x = TRUE)
   
   # merge with additional information on taxa/ parameters 
@@ -219,6 +221,7 @@ ppr_pmaps <- function(dat, Overzicht_kp, hybi, nomogram, meanSoil, pYEAR = FALSE
 # calculate mean ekr score per year, calc mean score last 3 measured years, calculate oordeel (score compared 2 goals) & calculate reference score 
 tabelEKRPerWLEnEAGPerJaar <- function (EKRset, detail = "deel", minjaar = 2013, outdir = "../output"){
   
+  
   # make local copy (only within this function)
   db <- EKRset[EKRset$jaar > 2005, ]
   
@@ -295,7 +298,7 @@ trendkrw <- function(EKRset){
   EKRset$jaarlm <- as.numeric(EKRset$jaar-2006)
   # add last year when measures were executed
   # columns to group alle meetpunten over de jaren
-  colg <- c('EAGIDENT','waterlichaam','KRW_SGBP3','aggregated','KRWwatertype.code','GHPR','GHPR_level','level','facet_wrap_code', 'GEP_2022', 'SGBP3_NAAM')
+  colg <- c('EAGIDENT','waterlichaam_code','KRW_SGBP3','aggregated','KRWwatertype.code','GHPR','GHPR_level','level','facet_wrap_code', 'GEP_2022', 'SGBP3_NAAM')
    
   EKRset <- EKRset[,lastyear := max(jaar), by = colg]
   
@@ -327,7 +330,8 @@ beschrijvingtrend <- function(ekrtrendeag){
                          ifelse(ekrtrendeag$estimate < 0 & ekrtrendeag$r.squared == 1, paste0("De score op de maatlat ", ekrtrendeag$facet_wrap_code, " neemt toe (", ekrtrendeag$estimate, " ekr per planperiode tussen 2006 en ", ekrtrendeag$lastyear, "). Deze trend is gebaseerd op twee meetjaren."), paste0("De score op de maatlat ", ekrtrendeag$facet_wrap_code, " blijft gelijk.")
                          ))))
   # hier dcast om tabel met header kwaliteitslementen te maken
-  ekr_scores_trendbesc <- dcast.data.table(setDT(ekrtrendeag), EAGIDENT ~ facet_wrap_code, value.var = c("toelichting"))
+  ekr_scores_trendbesc <- dcast.data.table(setDT(ekrtrendeag), EAGIDENT+KRW_SGBP3 ~ facet_wrap_code, value.var = c("toelichting"))
+  
   # remove NA
   ekr_scores_trendbesc[is.na(ekr_scores_trendbesc)] <- ""
   # merge tekst
@@ -362,7 +366,7 @@ createDashboarddata <- function(ekrlijst, minjaar = 2006, trendjaar = 2017, outd
   
   # calculate trend EKR per metric and EAG
   setDT(db)[, c('intc', 'slope') := as.list(coef(lm(Numeriekewaarde ~ jaarlm, na.action = NULL))), by = colg]
-  tb <- setDT(db)[aantalmeetjaar>2,as.list(broom::glance(lm(Numeriekewaarde ~ jaarlm, na.action = NULL))), by = c(colg , 'lastyear','intc', 'slope')]
+  tb <- setDT(db)[aantalmeetjaar>2, as.list(broom::glance(lm(Numeriekewaarde ~ jaarlm, na.action = NULL))), by = c(colg , 'lastyear','intc', 'slope')]
   # adjust slope to calculate trend in 6 years (planperiode)
   tb[,slope := tb$slope*6]
   # filter significance value (<0.1 = weak evidence or a trend) en relevant trends
@@ -397,7 +401,6 @@ createDashboarddata <- function(ekrlijst, minjaar = 2006, trendjaar = 2017, outd
 }
 
 # calculate mean wq data
-wq.sel <- apriltmsep
 calcMeanWq <- function(wq.sel = wq.sel, nyears = 3, smonth = 1:12, pEAG = TRUE, pYEAR = TRUE, pSEASON = TRUE){
   
   # make local copy
@@ -453,7 +456,7 @@ trend_fychem <- function(fychem_vast, filter = "Ntot", grens1 =0.25, grens2 =0.1
       trend$trend[trend$p.value < 0.05 & trend$estimate <=-grens1] <- paste0(filter, " neemt af in de tijd op meetlocatie ", i, ".")
       trend$trend[trend$p.value > 0.05 ] <- paste0(filter, " blijft gelijk in de tijd op meetlocatie ", i, ".")
       dt.add.trend <- data.table(i, unique(ts$XCOORD), unique(ts$YCOORD),unique(ts$EAGIDENT), trend$trend, trend$p.value, trend$estimate)
-    }else{dt.add.trend <- data.table(i, paste0("Voor ",filter, " kan er geen trend bepaald worden op meetlocatie ",i, "."))}
+    }else{dt.add.trend <- data.table(i, unique(ts$XCOORD), unique(ts$YCOORD),unique(ts$EAGIDENT), paste0("Voor ",filter, " kan er geen trend bepaald worden op meetlocatie ",i, "."),1,0)}
     
     dt.trend <- rbind(dt.trend, dt.add.trend)
     

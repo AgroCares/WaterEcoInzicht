@@ -26,8 +26,9 @@ import_wqdata <- function(path = paste0('./input/', snapshot, '/fychem/'), locat
   setnames(fychem, c("naam"),c("parameterid_naam"))
   
   return(fychem)
-  
+
 }
+
 # import output Aquo-kit ------------
 importKRW <- function(inputdir = "./input/20230803/rapportagefiles", 
                       locaties = locaties, eag_wl, orderMaatlatten) {
@@ -44,26 +45,38 @@ importKRW <- function(inputdir = "./input/20230803/rapportagefiles",
   EKRlijst <- merge(EKRlijst, locaties[,c('CODE','EAGIDENT','XCOORD','YCOORD')], by.x = 'locatie', by.y = 'CODE', all.x = TRUE)
   # complement EAGIDENT with aggregated KRW results (which can not be mapped from locatie)
   EKRlijst[locatie %in% unique(eag_wl$EAGIDENT[eag_wl$EAGIDENT!=""]), EAGIDENT := locatie]
+  
+  # complement OWMIDENT from aggregated results (which can not be mapped from eag) -- annoying = the change of referring to waterbodies in de toetsresulateten differes each year
+  # EKRlijst[GeoObject.code %in% unique(eag_wl$KRW_SGBP3[eag_wl$KRW_SGBP3!=""]), KRW_SGBP3 := GeoObject.code]
+  eag_wl <- eag_wl[,krwlocatie :=  sapply(strsplit(KRWmonitoringslocatie_SGBP3, '_'), `[`, 2)]
+  EKRlijst[locatie %in% unique(eag_wl$krwlocatie[eag_wl$KRW_SGBP3!=""]), krwlocatie := locatie]
+  EKRlijst <- merge(EKRlijst, unique(eag_wl[,c('KRW_SGBP3','krwlocatie')]), by = 'krwlocatie', all.x = TRUE)
+
   # merge data with additional info KRW waterbody (mapped 2 eagident)
   EKRlijst <- merge(EKRlijst, eag_wl[,c('EAGIDENT','GAFIDENT','GAFNAAM','KRW_SGBP3')], by = 'EAGIDENT',all.x = TRUE)
-  # complement OWMIDENT from aggregated results (which can not be mapped from eag)
-  EKRlijst[GeoObject.code %in% unique(eag_wl$KRW_SGBP3[eag_wl$KRW_SGBP3!=""]), KRW_SGBP3 := GeoObject.code]
-  # merge data with names info KRW waterbody
+  EKRlijst[,KRW_SGBP3 := KRW_SGBP3.x]
+  EKRlijst[!is.na(EAGIDENT), KRW_SGBP3 := KRW_SGBP3.y]
+  EKRlijst[,c('KRW_SGBP3.x','KRW_SGBP3.y') := NULL]
+  
+  # add name KRW
   EKRlijst <- merge(EKRlijst, unique(eag_wl[,c('KRW_SGBP3','SGBP3_NAAM')]), by = 'KRW_SGBP3', all.x = TRUE)
+ 
   # add naam van een toetsgebied (WL of EAG naam)
   EKRlijst[,waterlichaam := fifelse(!(is.na(SGBP3_NAAM)|SGBP3_NAAM == ""), SGBP3_NAAM, GAFNAAM)]
   EKRlijst[,waterlichaam_code := fifelse(!(is.na(KRW_SGBP3)|KRW_SGBP3 == ""), KRW_SGBP3, EAGIDENT)]
   
   # remove data which cannot be mapped 2 location, eag or owm (fish data)
-  checkloc <-  EKRlijst[is.na(EAGIDENT) & is.na(KRW_SGBP3),]
+  # checkloc <-  EKRlijst[(is.na(EAGIDENT)|EAGIDENT == "") & (is.na(KRW_SGBP3)|KRW_SGBP3 ==""),]
+  
   if(nrow(checkloc)>1){
     warning(paste0('locatie ', unique(checkloc$locatie), ' komt wel voor in toetsresultaten maar niet in meetpuntenbestand'))}
-  EKRlijst <- EKRlijst[!is.na(EAGIDENT) | !is.na(KRW_SGBP3),]
+  EKRlijst <- EKRlijst[!is.na(EAGIDENT) | !(is.na(KRW_SGBP3)|KRW_SGBP3 == ""),]
   
   # Bewerken data / proces data ---------------------------------------------------
   #add unique ID 4 aggregated data 
   EKRlijst[, aggregated := 'nee']
-  EKRlijst[EAGIDENT == locatie | GeoObject.code == KRW_SGBP3, aggregated := 'ja']
+  # EKRlijst[EAGIDENT == locatie | GeoObject.code == KRW_SGBP3, aggregated := 'ja']
+  EKRlijst[EAGIDENT == locatie | krwlocatie == locatie, aggregated := 'ja']
   # make classes a factor
   EKRlijst$klasse <- as.factor(EKRlijst$Classificatie)
   # add year
