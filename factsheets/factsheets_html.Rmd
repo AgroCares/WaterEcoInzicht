@@ -241,11 +241,12 @@ include_graphics(out$plotWaterbodem)
 ```
 
 
-## {data-height="12"}
+## 
 
 ### Brondata: Water- en stoffenbalansen (balans t/m `r out$pvskpversie`) 
 
-```{r watbaltable, echo=FALSE, message=FALSE, warning=FALSE, out.width="100%", results='asis'}
+
+```{r watbaltable, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 
 pvskplegend_tab <- out$pvskp_legend
 
@@ -256,19 +257,22 @@ if(nrow(pvskplegend_tab)>0){
   knitr::kable(pvskplegend_tab, format = "html", col.names = c("balansgebied","inlaat 1",
                                                                "inlaat 2","inlaat 3","inlaat 4",
                                                                "inlaat 5")) %>% 
-          kable_styling(full_width=TRUE) %>% 
+          kable_styling(full_width=TRUE, font_size = 11) %>% 
+          row_spec(0, font_size=11)%>%
           column_spec(1, border_right = F)
 }
- 
-
 
 ```
+
 
 ### Brondata: Metingen fysisch-chemie (`r out$wqversie`) en hydrobiologie (`r out$hybiversie`)
 
 ### Brondata: Metingen waterbodemchemie (`r out$bodversie`)
 
-##  EKR scores op alle deelmaatlatten in de tijd 
+
+
+##  EKR scores op alle deelmaatlatten in de tijd {data-height="600"}
+
 
 ```{r ekrtijd, echo= FALSE, warning = FALSE, message = FALSE, out.width= "100%"}
 

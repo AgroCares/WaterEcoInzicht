@@ -520,48 +520,53 @@ plotEKRlijnfs <- function(EKRset1, gebied = NULL){
   z[,Numeriekewaarde := `.`]
   z[,maatlatniv := factor(level, levels = c("1","2","3"), labels = c("hoofdmaatlat","deelmaatlat","indicator"))]
   
-  # filter unique goal (per area)
-  GEP_2022 <- unique(z$GEP_2022)
-  
-  # calc axis limits
-  xmin <- min(z$jaar)-2
-  xmax <- max(z$jaar)+2
   max_y_axis <- ifelse(max(z$Numeriekewaarde) == 1, 1.05, 
-                       ifelse(max(z$Numeriekewaarde) > GEP_2022, 1, (1-GEP_2022)/2+GEP_2022))
+                       ifelse(max(z$Numeriekewaarde) > max(z$GEP_2022), 1, max(z$GEP_2022)+0.1))
   
   # define background goals (GEP_2022 is goal which is set in 2022)
-  rects <- data.frame(xmin = xmin, 
-                      xmax = xmax,
-                      ymin = c(GEP_2022,(GEP_2022 / 3 * 2),(GEP_2022 / 3),0),  
-                      ymax = c(max_y_axis,GEP_2022,(GEP_2022 / 3 * 2),(GEP_2022 / 3)),
-                      fill = c("lawngreen", "yellow", "orange","red"),
-                      label = c("goed", "matig","ontoereikend","slecht"))
-  
-  legend_colors <- setNames(c("lawngreen", "yellow", "orange","red"), rects$label)
+  bg <- unique(z[,c('wlmt','GEP_2022')])
+  # define background goals (GEP_2022 is goal which is set in 2022)
+  bg[,c('goed_ymin','goed_ymax') := .(GEP_2022,max_y_axis)]
+  bg[,c('matig_ymin','matig_ymax') := .(GEP_2022 / 3 * 2,GEP_2022)]
+  bg[,c('ontoereikend_ymin','ontoereikend_ymax') := .(GEP_2022 / 3,GEP_2022 / 3 * 2)]
+  bg[,c('slecht_ymin','slecht_ymax') := .(0,GEP_2022 / 3)]
+  bg <- melt(bg,id.vars = c('wlmt','GEP_2022'),
+             variable.name = 'doelen',value.name = 'waarde')
+  bg[,varrange := fifelse(grepl('_ymin',doelen),'ymin','ymax')]
+  bg[,doelen := gsub("(.+?)(\\_.*)", "\\1", doelen)]
+  bg <- dcast.data.table(bg,wlmt+GEP_2022+doelen~varrange,value.var='waarde')
+  bg[,doelen:= as.factor(doelen)]
+  bg[,xmin := min(z$jaar)-2]
+  bg[,xmax := max(z$jaar)+2]
+  legend_colors <- c("lawngreen", "yellow", "orange","red")
+  names(legend_colors) <- levels(bg$doelen)
   
   # prep colours and linetype
   cols <- c("black","grey3","#252525","grey24","grey40","#636363","#969696","#CCCCCC")
   cols <- as.data.table(cols)[,id := rep(1:8)]
   cols[,linetype:= c("solid","dashed","dotted","dotdash","longdash","twodash","dashed","dotted")]
   setorder(z, level)
-  z[, id := .GRP, by = 'GHPR']
+  z[level == 1, id := .GRP, by = c('GHPR')]
+  z[level == 2, id := .GRP, by = c('GHPR')]
+  z[level == 3, id := .GRP, by = c('GHPR')]
   z <- merge(z, cols, by = 'id', all.x = TRUE)
+  cols <- unique(z[,c('GHPR','cols','linetype')])
   
   # prep order legend
   setorder(z, GHPR_level, jaar)
-  ghpr_order <- unique(z$GHPR)
+  ghpr_order <- unique(z$cols)
   
   ggplot(data= z, aes(x=jaar, y=Numeriekewaarde, col = GHPR, group = GHPR, linetype = linetype))+
     stat_summary(fun = "mean", geom = "point") +
     stat_summary(fun = "mean", geom = "line") +
-    scale_colour_manual(values = unique(z$cols), breaks = ghpr_order)+
+    scale_colour_manual(values = cols$cols, breaks = cols$GHPR)+
     scale_linetype_manual(values = c('solid'='solid','dashed'='dashed', "dotted"="dotted","longdash"="longdash",'dotdash'='dotdash',"twodash"="twodash",'dashed'='dashed', "dotted"="dotted"), breaks = ghpr_order)+
-    scale_x_continuous(expand = c(0, 0), limits= c(xmin, xmax), n.breaks = 8, labels = scales::number_format(accuracy = 1, big.mark = ''))+
+    scale_x_continuous(expand = c(0, 0), limits= c(min(z$jaar)-2, max(z$jaar)+2), n.breaks = 8, labels = scales::number_format(accuracy = 1, big.mark = ''))+
     scale_y_continuous(expand = c(0, 0), limits = c(0, max_y_axis), breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1)) +
     
-    geom_rect(data= rects, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = fill), 
+    geom_rect(data= bg, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = doelen), 
               inherit.aes = FALSE, alpha = 0.15) +
-    scale_fill_identity('Doel waterkwaliteit:',breaks = legend_colors, labels = c("goed", "matig","ontoereikend","slecht"), guide = guide_legend(override.aes = list(alpha = 0.15)))+
+    scale_fill_manual('Doel waterkwaliteit:', values = legend_colors, labels = c("goed", "matig","ontoereikend","slecht"), guide = guide_legend(override.aes = list(alpha = 0.15)))+
     
     facet_grid(vars(maatlatniv),vars(wlmt))+
     ylab('')+xlab('')+
