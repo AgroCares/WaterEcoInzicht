@@ -110,11 +110,11 @@ brondata <- list(ESFoordelen = ESFoordelen,
 # run for all files
 # NB. delete eerst alle plots in plotviewer
 
-for(eagnr in c(1:nrow
-               (brondata$ESFoordelen))){#5, 13, 32 : nrow(brondata$ESFoordelen)){ 
+for(eagnr in c(81:nrow
+               (brondata$ESFoordelen))){
 
   # voor debug attach(brondata) detach(brondata)
-  # eagnr <- 176
+  # eagnr <- 176 heeft geen doel
   
   # collect the data for that specific water body / EAG / GAF
   out = factsheetExtract(i=eagnr, brondata = brondata, splot = TRUE)

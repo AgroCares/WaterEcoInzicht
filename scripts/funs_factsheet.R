@@ -213,9 +213,7 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
     # plot figure EKR
     mapEKR <- ppr_ekrplot(ekr_scores1)
     # create plt met ekr scores in de tijd
-    # ongewogen scores obv koppeling locatie en EAG
-    z <- rbind(EKRset1[aggregated == 'ja',], EKRset1[aggregated == 'nee'& level == 3,])
-    plotEKRlijn <- plotEKRlijnfs(z)
+    plotEKRlijn <- plotEKRlijnfs(EKRset1)
   } else {
     # plot figure EKR when no data is available
     db <- data.frame()
@@ -503,8 +501,11 @@ ppr_ekrplot <- function(ekr_scores1){
   return(plot)
 }
 # plot EKR background
-plotEKRlijnfs <- function(z, gebied = NULL){
-
+plotEKRlijnfs <- function(EKRset1, gebied = NULL){
+  
+  # ongewogen scores obv koppeling locatie en EAG
+  z <- rbind(EKRset1[aggregated == 'ja',], EKRset1[aggregated == 'nee'& level == 3,])
+  
   if(!is.null(gebied)){
     z <- z[!is.na(z$EAGIDENT),]
     z$KRW_SGBP3 <- ""
@@ -515,15 +516,53 @@ plotEKRlijnfs <- function(z, gebied = NULL){
   z[,Numeriekewaarde := as.numeric(Numeriekewaarde)]
   z[,facet_wrap_code := as.character(facet_wrap_code)]
   z[,wlmt := ifelse(is.na(KRW_SGBP3)|KRW_SGBP3 == "", paste0(EAGIDENT," ",facet_wrap_code), facet_wrap_code)]
-  z <- dcast(z, waterlichaam+wlmt+GHPR+GHPR_level+level+jaar~., value.var = 'Numeriekewaarde', fun.aggregate=mean)
+  z <- dcast(z, waterlichaam+wlmt+GHPR+GHPR_level+level+GEP_2022+jaar~., value.var = 'Numeriekewaarde', fun.aggregate=mean)
   z[,Numeriekewaarde := `.`]
   z[,maatlatniv := factor(level, levels = c("1","2","3"), labels = c("hoofdmaatlat","deelmaatlat","indicator"))]
   
-  ggplot(data= z, aes(x=jaar, y=Numeriekewaarde, col = GHPR, group = GHPR))+
+  # filter unique goal (per area)
+  GEP_2022 <- unique(z$GEP_2022)
+  
+  # calc axis limits
+  xmin <- min(z$jaar)-2
+  xmax <- max(z$jaar)+2
+  max_y_axis <- ifelse(max(z$Numeriekewaarde) == 1, 1.05, 
+                       ifelse(max(z$Numeriekewaarde) > GEP_2022, 1, (1-GEP_2022)/2+GEP_2022))
+  
+  # define background goals (GEP_2022 is goal which is set in 2022)
+  rects <- data.frame(xmin = xmin, 
+                      xmax = xmax,
+                      ymin = c(GEP_2022,(GEP_2022 / 3 * 2),(GEP_2022 / 3),0),  
+                      ymax = c(max_y_axis,GEP_2022,(GEP_2022 / 3 * 2),(GEP_2022 / 3)),
+                      fill = c("lawngreen", "yellow", "orange","red"),
+                      label = c("goed", "matig","ontoereikend","slecht"))
+  
+  legend_colors <- setNames(c("lawngreen", "yellow", "orange","red"), rects$label)
+  
+  # prep colours and linetype
+  cols <- c("black","grey3","#252525","grey24","grey40","#636363","#969696","#CCCCCC")
+  cols <- as.data.table(cols)[,id := rep(1:8)]
+  cols[,linetype:= c("solid","dashed","dotted","dotdash","longdash","twodash","dashed","dotted")]
+  setorder(z, level)
+  z[, id := .GRP, by = 'GHPR']
+  z <- merge(z, cols, by = 'id', all.x = TRUE)
+  
+  # prep order legend
+  setorder(z, GHPR_level, jaar)
+  ghpr_order <- unique(z$GHPR)
+  
+  ggplot(data= z, aes(x=jaar, y=Numeriekewaarde, col = GHPR, group = GHPR, linetype = linetype))+
     stat_summary(fun = "mean", geom = "point") +
     stat_summary(fun = "mean", geom = "line") +
-    scale_y_continuous(limits= c(0, 1), breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1))+
-    scale_x_continuous(limits= c(2006, 2026), breaks=c(2006, 2008, 2010, 2012, 2014,2016,2018,2020,2022,2024))+
+    scale_colour_manual(values = unique(z$cols), breaks = ghpr_order)+
+    scale_linetype_manual(values = c('solid'='solid','dashed'='dashed', "dotted"="dotted","longdash"="longdash",'dotdash'='dotdash',"twodash"="twodash",'dashed'='dashed', "dotted"="dotted"), breaks = ghpr_order)+
+    scale_x_continuous(expand = c(0, 0), limits= c(xmin, xmax), n.breaks = 8, labels = scales::number_format(accuracy = 1, big.mark = ''))+
+    scale_y_continuous(expand = c(0, 0), limits = c(0, max_y_axis), breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1)) +
+    
+    geom_rect(data= rects, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = fill), 
+              inherit.aes = FALSE, alpha = 0.15) +
+    scale_fill_identity('Doel waterkwaliteit:',breaks = legend_colors, labels = c("goed", "matig","ontoereikend","slecht"), guide = guide_legend(override.aes = list(alpha = 0.15)))+
+    
     facet_grid(vars(maatlatniv),vars(wlmt))+
     ylab('')+xlab('')+
     guides(col=guide_legend(title="(Deel)maatlat: "))+
