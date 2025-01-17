@@ -13,15 +13,24 @@ require(dplyr) ;require(stringr)
 require(sf);require(data.table)
 require(magrittr);require(ggplot2)
 require(plotly)
-require(grid)
-require(gridExtra)
+# require(grid)
+# require(gridExtra)
+library(cowplot)
 
 # add functions
 source('./scripts/import_data.R')
 source('./scripts/funs_factsheet.R')
 
-# settings ------------
-workspace <- '20230803'
+# to do ----------------
+# tekstuele toelicht maatregelen en ESF analyses (polders) verbeteren 
+# nakijken figuren en EST
+# esf icon bij esf 9
+# maatregelen uitgevoerd datum niet bijgehouden
+# Botshol kP aanpassen
+
+
+# mail cop
+# mail FS en dashboarddata
 
 ```
 
@@ -36,7 +45,6 @@ bod <- readRDS("./data/bodchem.rds") %>% as.data.table()
 # select only measurements from sediment surface
 bod <- bod[compartiment %in% c('SB','PW'),]
 bod <- bod[parameterid %in% c("Fe_mg_kg_dg","Fe_mg_l","Fe_mg_l_nf","Fe_mg_l_ng","Ptot_gP_kg_dg","Ptot_mgP_l","Ptot_mgP_l_nf","Ptot_mgP_l_ng","SO4_mg_l_nf","Stot_mgS_kg_dg","Stot_mgS_l_nf","Stot_mgS_l_ng")]
-
 # waterbalans data (made by loadBalances function)
 dat <- readRDS("./data/dat.rds")
 dat[,date := as.POSIXct(paste0(jaar,"-",maand,"-01"), format = '%Y-%m-%d')]
@@ -52,28 +60,23 @@ trendfychem <- readRDS('./data/trendfychem.rds')
 toestandbeschrijving_eag <- readRDS('./data/eagtoestandbeschrijving.rds')
 # load trend NP
 ekrtrendbeschrijving <- readRDS('./data/krw/ekrtrendbeschrijving.rds')
-
-eag_wl <- data.table::fread(paste0('./input/', workspace, '/gebiedsinfo/EAG_Opp_kenmerken_20220811.csv'))
-eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
-eag_wl$EAGIDENT <- eag_wl$GAFIDENT
-eag_wl$GAFIDENT <- sapply(strsplit(eag_wl$EAGIDENT, '-'), `[`, 1)
-
+# load info EAGs
+eag_wl <- readRDS(paste0('./data/eag_wl.rds'))
 # read in the latest version of ESFoordelen from 'data'
 ESFoordelen <- ppr_esf_oordeel(dir = './input/toestand_esf/', eag_wl, ekrtrendbeschrijving, trendfychem, toestandbeschrijving_eag)
 write.table(ESFoordelen, file = paste("./output/ESFoordelen_out",format(Sys.time(),"%Y%m%d%H%M"),".csv"), quote = TRUE, na = "", sep =';', dec='.',row.names = FALSE)
-
+# remove cols which are not presented separately yet
+ESFoordelen[,c('ESF4_biota','ESF4_fysisch','ESF4_chemisch'):=NULL]
 # informatie over maatregelen
 maatregelen <- ppr_maatregelen(dir = './input/maatregelen/')
 maatregelen <- maatregelen[!maatregelen$SGBPPeriode.omschrijving %in% c('Niet uitvoeren','Niet opnemen in SGBP3', "niet opnemen in SGBP3"),]
-
 # geographic files for mapping -------------
 # shape met alle EAGs
 EAG <- st_read("./data/EAG.gpkg") %>% st_transform(28992)
-EAG$watertype <- NULL
 # shape met al het water in EAG
-waterpereag <- sf::st_read(paste0('./input/',workspace, '/gebiedsinfo/WaterPerEAG20191205.gpkg'),quiet = T) %>% sf::st_transform(28992)
+waterpereag <- sf::st_read(paste0('./data/WaterPerEAG20191205.gpkg'),quiet = T) %>% sf::st_transform(28992)
 # shape met waterschapsgebied
-waterschappen  <- sf::st_read(paste0('./input/',workspace, '/gebiedsinfo/2019_gemeentegrenzen_kustlijn_simplified.shp'),quiet = T) %>%sf::st_transform(28992)
+waterschappen  <- sf::st_read(paste0('./data/2019_gemeentegrenzen_kustlijn_simplified.shp'),quiet = T) %>%sf::st_transform(28992)
 
 # data voor EST tekening ----------------------
 # dit bestand moet af en toe geupdate obv nieuwe hybi en EAG data
@@ -81,7 +84,6 @@ EST <- readRDS('./data/estloc.rds')
 # koppeltabel om de juiste tekening te kunnen koppelen
 EST_kt <- data.table::fread('./input/EST_koppeltabel.csv', encoding = "Latin-1")
 EST_kt[,estnaam := lapply(estnaam, function(x) gsub("^\\s+|\\s+$", "", x))]
-
 
 # watertypen beschrijving
 watertypen <- data.table::fread('./input/KRWWatertype.csv')
@@ -96,7 +98,7 @@ brondata <- list(ESFoordelen = ESFoordelen,
                    hybi = hybi,
                    bod = bod,
                    gEAG = EAG,
-                   waterpereag1 = waterpereag,
+                   waterpereag = waterpereag,
                    waterschappen = waterschappen,
                    watertypen = watertypen,
                    EST = EST,
@@ -106,11 +108,13 @@ brondata <- list(ESFoordelen = ESFoordelen,
 
 ```{r render factsheets}
 # run for all files
+# NB. delete eerst alle plots in plotviewer
 
 for(eagnr in c(1:nrow
                (brondata$ESFoordelen))){#5, 13, 32 : nrow(brondata$ESFoordelen)){ 
 
   # voor debug attach(brondata) detach(brondata)
+  # eagnr <- 176
   
   # collect the data for that specific water body / EAG / GAF
   out = factsheetExtract(i=eagnr, brondata = brondata, splot = TRUE)
@@ -121,7 +125,8 @@ for(eagnr in c(1:nrow
   
   # output voor domeinen, K3: naam met EAG_ en KRWIDENT_
   titel <- paste(out$eagwl$EAGIDENT, collapse = "_")
-  if(any(!out$eagwl$KRW_SGBP3 == "")){
+  
+  if(any(!(out$eagwl$KRW_SGBP3 == ""|is.na(out$eagwl$KRW_SGBP3)))){
   titel2 <- paste(out$waterlichamenwl$OWL_SGBP3, collapse = '_')
   titel <- paste(titel2, titel, sep = '_', collapse = '_')}
   titel <- gsub(", ","_",titel)

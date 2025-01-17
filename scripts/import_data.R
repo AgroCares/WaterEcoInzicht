@@ -18,11 +18,12 @@ import_wqdata <- function(path = paste0('./input/', snapshot, '/fychem/'), locat
   fychem <- fychem[,grep('WNA ', colnames(fychem)):= NULL]
   if('locatiecode' %in% colnames(fychem)){fychem[,locatie := locatiecode]}
   fychem <- merge(fychem, location, by.x = 'locatie', by.y = 'CODE', all.x = TRUE)
-  
   if('fewsparameter' %in% colnames(fychem)){fychem[,parameterid := fewsparameter]}
   if('analysecode' %in% colnames(fychem)){fychem[,analyse := analysecode]}
+  fychem[,c('parameter','parametercode','grootheid','parameterfractie','eenheid','eenheidreferentie','eenheidequivalent'):=NULL]
   # couple data 2 additional parameterinfo
-  fychem <- merge(fychem, parameter[,c("code","naam", "categorie", "H_min", "H_max")], by.x = 'parameterid', by.y = 'code')
+  # replace or add parameter, grootheid, typering, eenheid with domainvalues
+  fychem <- merge(fychem, parameter[,c("code","naam", 'parameter','grootheid','parameterfractie','eenheid','eenheidreferentie','eenheidequivalent',"categorie","H_min", "H_max")], by.x = 'parameterid', by.y = 'code')
   setnames(fychem, c("naam"),c("parameterid_naam"))
   
   return(fychem)
@@ -105,8 +106,7 @@ ppr_esf_oordeel <- function(dir = './input/toestand_esf/', eag_wl, ekrtrendbesch
   fname <- list.files(dir, pattern = '.csv$')
   fname <- sort(fname[grepl('^esfKRW',fname)],decreasing = TRUE)[1]
   
-  
-  # read ESF oordelen
+    # read ESF oordelen
   d1 <- data.table::fread(paste0(dir,'/',fname),encoding = "Latin-1")
   
   # which colnames are character
@@ -135,6 +135,7 @@ ppr_esf_oordeel <- function(dir = './input/toestand_esf/', eag_wl, ekrtrendbesch
                            ifelse(d1$ESF3_nr == '1',paste('Het watersysteem voldoet aan de eisen van de sleutelfactor productiviteit waterbodem. De hoeveelheid voedingstoffen en de toxines sulfide en ammonium in de waterbodem zijn voldoende laag voor de ontwikkeling van een soortenrijke onderwatervegetatie. ', d1$ESF3),
                                   paste('Het is onbekend of het watersysteem voldoet aan de eisen van de sleutelfactor productiviteit waterbodem. Het is niet bekend of de hoeveelheid voedingstoffen in de waterbodem te hoog of laag is. ', d1$ESF3))))
   #ESF4
+  d1[,ESF4 := paste0(ESF4,ESF4_biota,ESF4_fysisch,ESF4_chemisch)]
   d1$ESF4 <- ifelse(d1$ESF4_nr == '3', paste('Het watersysteem voldoet niet aan de eisen van de sleutelfactor habitatgeschiktheid. Het water voldoet dus niet aan de belangrijkste eisen die planten en dieren aan hun leefomgeving stellen. Dit wordt vooroorzaakt door een ongewenste habitatstructuur (zoals waterdiepte, slibsamenstelling, oevertalud, peilfluctuatie) en/of een ongewenste variatie in de chemische samenstelling (zoals chloride, macro-ionen) van het water. Niet alleen fysieke systeemkenmerken, maar ook de vegetatiedichtheid en -structuur bieden habitatstructuur; macrofauna en visgemeenschappen worden dus ook beïnvloed door de aanwezige vegetatie.', d1$ESF4),
                     ifelse(d1$ESF4_nr == '2',paste('Het watersysteem voldoet mogelijk (of lokaal) niet aan de eisen van de sleutelfactor habitatgeschiktheid. Het water voldoet mogelijk (of lokaal) niet aan de belangrijkste eisen die planten en dieren aan hun leefomgeving stellen. Dit wordt mogelijk vooroorzaakt door een ongewenste habitatstructuur (zoals waterdiepte, slibsamenstelling, oevertalud, peilfluctuatie) en/of een ongewenste variatie in de chemische samenstelling (zoals chloride, macro-ionen) van het water. Niet alleen fysieke systeemkenmerken, maar ook de vegetatiedichtheid en -structuur bieden habitatstructuur; macrofauna en visgemeenschappen worden dus ook beïnvloed door de aanwezige vegetatie.', d1$ESF4),
                            ifelse(d1$ESF4_nr == '1',paste('Het watersysteem voldoet aan de eisen van de sleutelfactor habitatgeschiktheid. Het water voldoet dus aan de belangrijkste eisen die planten en dieren aan hun leefomgeving stellen. Zowel de habitatstructuur (waterdiepte, de samenstelling van het slib, het oevertalud) als variaties in chemische samenstelling (chloride, macro-ionen) zijn geschikt voor de gewenste planten of dieren. De vegetatie is voldoende dicht en complex voor het voorkomen van gewenste macrofauna en visgemeenschappen.', d1$ESF4),
@@ -186,6 +187,18 @@ ppr_esf_oordeel <- function(dir = './input/toestand_esf/', eag_wl, ekrtrendbesch
   # combine mapdata sets krw eag and gaf
   mapdata <- rbind(mapdata_krw[,c('id','OWMNAAM_SGBP3','EAGIDENT')], mapdata_eag[,c('id','OWMNAAM_SGBP3','EAGIDENT')],  mapdata_gaf[,c('id','OWMNAAM_SGBP3','EAGIDENT')])
   mapdata <- mapdata[!is.na(EAGIDENT),]
+  
+  # validate
+  # check if EAGs 2 keer voorkomen
+  dup_mapdata <- mapdata[duplicated(mapdata, by=c("EAGIDENT"))|duplicated(mapdata, by=c("EAGIDENT"),fromLast=TRUE)]
+  if(nrow(dup_mapdata)>0){print(paste0("EAG komt meerdere keren voor in tabel bij ", unique(dup_mapdata$OWMNAAM_SGBP3)), collapse = TRUE)}
+  # check if EAGs are present in EAG
+  mis_eag <- mapdata[!EAGIDENT %in% eag_wl$EAGIDENT,]
+  if(nrow(mis_eag)>0){print(paste0("EAGs ", unique(mis_eag$EAGIDENT), " komt niet voor in polygonen met eags"))}
+  # check which EAGs are missing in esf analyse
+  mis_eag <- eag_wl[!EAGIDENT %in% mapdata$EAGIDENT,]
+  if(nrow(mis_eag)>0){print(paste0("EAGs ", unique(mis_eag$EAGIDENT), " komt niet voor in esf database"))}
+  
   # add toestand obv toestandbeschrijving
   mapdata <- merge(mapdata, toestandbeschrijving_eag, by = "EAGIDENT", all.x = T)
   # add trend hybi
@@ -193,7 +206,7 @@ ppr_esf_oordeel <- function(dir = './input/toestand_esf/', eag_wl, ekrtrendbesch
   # add trend fychem
   mapdata <- merge(mapdata, trendfychem, by = "EAGIDENT", all.x = T)
   
-  # hier dcast om tabel met header kwaliteitslementen te maken
+  # hier dcast 
   est_toestand <- dcast.data.table(setDT(mapdata), id + OWMNAAM_SGBP3 ~ EAGIDENT, value.var = c("toestandb"))
   # merge tekst
   est_toestand[,toestandb := do.call(paste, c(.SD, sep = " ")), .SDcols = 3:ncol(est_toestand)]
@@ -262,10 +275,11 @@ ppr_maatregelen <- function(dir = 'data'){
 
 # importeer waterbalansen-------------
 # functie om algemene gegevens van de excelsheet te laden 
-loadAlgemeen = function(x,wdir){
+loadAlgemeen <- function(x,wdir){
   
   # file name including location
   fname <- paste0(wdir,x)
+  # fname <- paste0(wdir,files[67])
   
   # print progress
   print(paste0('algemene data van ',basename(fname),' worden ingelezen'))
@@ -273,6 +287,7 @@ loadAlgemeen = function(x,wdir){
   # read the tab uitangspunten
   tabbladen <-    excel_sheets(fname)
   n2 <- tabbladen[grepl("uitg", tolower(tabbladen))]
+  if(length(n2)<=0){n2 <- tabbladen[grepl("data-invoer", tolower(tabbladen))]}
   alg = suppressMessages(readxl::read_xlsx(fname, sheet = n2, col_names = F, skip = 2)[1:34,1:9])
   
   # make data.table to store results
@@ -297,7 +312,7 @@ loadAlgemeen = function(x,wdir){
   # return output
   return(out)
 }
-loadBalance2 = function(x,wdir){
+loadBalance2 <- function(x,wdir){
   
   # file name including location
   fname <- paste0(wdir,x)
@@ -371,7 +386,7 @@ loadBalance2 = function(x,wdir){
   return(out)
 }
 # wrapper function 
-loadBalances_lm <- function(dir_bal, init, sfile = T){
+loadBalances_lm <- function(dir_bal, init, sfile = TRUE){
   
   # select file names in the directory where waterbalansen are stored
   files <- list.files(dir_bal)
@@ -380,7 +395,7 @@ loadBalances_lm <- function(dir_bal, init, sfile = T){
   files <- files[grepl('xlsx$',files)]
   
   # read excel data from sheet 'uitgangspunten' and combine all output in one data.table
-  alg <- lapply(files, function(x) loadAlgemeen(x,wdir = dir_bal))
+  alg <- lapply(files, function(x) loadAlgemeen(x, wdir = dir_bal))
   alg <- rbindlist(alg)
   
   # read excel data from sheet 'jaargemiddelden'
@@ -388,7 +403,7 @@ loadBalances_lm <- function(dir_bal, init, sfile = T){
   bal <- rbindlist(bal)
   
   #koppel uitgangspunten en q+p_mnd
-  dat <- merge(bal,alg, by='pol',all.x = TRUE)
+  dat <- merge(bal, alg, by='pol', all.x = TRUE)
   
   # remove rows without maalstaat
   dat <- dat[!is.na(w_maalstaat)]

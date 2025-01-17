@@ -125,22 +125,24 @@ ppr_wbalfiles <- function(dat, EAG = EAG){
   return(db)
 
 }
-ppr_pmaps <- function(dat, Overzicht_kp, hybi, nomogram, meanSoil, pYEAR = FALSE){
+ppr_pmaps <- function(dat, Overzicht_kp, hybi, nomogram, eag_bt, gaf_bt, jaar = 2006:2024, pYEAR = FALSE){
   
   # make local copy of soil and waterbalance data
   d1 <- copy(dat)
-  # koppel data soiltype
-  d1 <- merge(d1, meanSoil[,c('i_bt1','i_pol')], by.x = 'GAFIDENT', by.y = 'i_pol', all.x =T)
-  # koppel data watertype
-  d1 <- merge(d1, eag_wl[,-c('GAFIDENT')], by = 'EAGIDENT', all.x = TRUE)
-  
-  # update soiltype d1
-  d1[,bodem := i_bt1]
-  d1[is.na(i_bt1) & watertype %in% c('M8','M10','M27','M25'), bodem := "VEEN"]
-  d1[is.na(i_bt1) & watertype %in% c("M3", "M1a","M30","M14","M11","M6a","M7b","M6b","M7a"), bodem:='KLEI']
-  
+  # koppel data soiltype 78923
+  setDT(eag_bt);setDT(gaf_bt)
+  d1a <- merge(d1, eag_bt[,c('EAGIDENT','bd50.hoofd','watertype')], by = 'EAGIDENT')
+  d1b <- merge(d1, gaf_bt[,c('GAFIDENT','bd50.hoofd','watertype')], by = 'GAFIDENT')
+  d1 <- rbind(d1a, d1b, use.names=TRUE)
+  d1[bd50.hoofd %in% c("veengronden","moerige_gronden"),bodem := "veen"]
+  d1[bd50.hoofd %in% c("dikke_eerdgronden","zandgronden","humuspodzolgronden"),bodem := "zand"]
+  d1[bd50.hoofd %in% c("zeekleigronden","rivierkleigrond" ),bodem := "klei"]
+  d1[is.na(bodem) & watertype %in% c('M8','M10','M27','M25'), bodem := "veen"]
+  d1[is.na(bodem) & watertype %in% c("M3", "M1a","M30","M14","M11","M6a","M7b","M6b","M7a"), bodem:='klei']
+  d1[is.na(bodem) & watertype %in% c("M20"), bodem:='zand']
+ 
   # filter only recent years
-  dg <- d1[jaar %in% 2006:2024,]
+  dg <- d1[jaar %in% jaar,]
   
   # addgroup and estimate meerjarig mean for numeric values
   colsg <- colnames(dg)[grepl('^a_in|^a_uit|^EAGIDENT|^GAFIDENT|^KRW$|watertype|^bodem$|^pol|^EAGNAAM|GAFNAAM',colnames(dg))]
@@ -153,11 +155,11 @@ ppr_pmaps <- function(dat, Overzicht_kp, hybi, nomogram, meanSoil, pYEAR = FALSE
   dg[,wp_tot_sum := wp_min_sum + wp_inc_sum]
   
   # mean water depth per EAG
-  mdPtb <- hybi[jaar %in% 2012:2024 & parameterid == 'WATDTE_m']
-  mdPtb <- mdPtb[,.(meetwaarde = median(meetwaarde,na.rm = TRUE)),by='EAGIDENT']
+  mdPtb <- hybi[jaar > 2018 & parameterid == 'WATDTE_m']
+  mdPtb <- mdPtb[,.(meetwaarde = median(meetwaarde,na.rm = TRUE)), by='EAGIDENT']
  
   # mean water depth per GAF
-  mdPtbG <- hybi[jaar %in% 2010:2017 & parameterid == 'WATDTE_m']
+  mdPtbG <- hybi[jaar > 2018 & parameterid == 'WATDTE_m']
   mdPtbG <- mdPtbG[,.(meetwaarde = median(meetwaarde,na.rm = TRUE)),by='GAFIDENT']
   
   # merge met kP ----------------------------------------------------------
@@ -166,29 +168,29 @@ ppr_pmaps <- function(dat, Overzicht_kp, hybi, nomogram, meanSoil, pYEAR = FALSE
   dgwatdte  <- merge.data.table(dg[is.na(GAFIDENT),], mdPtb, by = 'EAGIDENT', all.x = T)
   dgwatdteG <- merge.data.table(dg[is.na(EAGIDENT),], mdPtbG, by = 'GAFIDENT', all.x = T)
   dgwatdte <- rbind(dgwatdte,dgwatdteG,fill = TRUE)  # mis 1 balans
-  dgwatdte$meetwaarde[is.na(dgwatdte$meetwaarde)] <- 0.5
+  dgwatdte[is.na(meetwaarde), meetwaarde := a_slootdiepte]
   
   # update merged table
   dgwatdte[,watdteF := cut(meetwaarde, breaks = c('0','0.3','0.5','0.7','7.0'))]
   dgwatdte[meetwaarde > 0.7, watdteF := '(0.5,0.7]']
+  dgwatdte[,debiet := cut(w_debiet, breaks = c('0','7','17','29','36','50','60','70','80','90','100','200','300','400'))]
+  dgwatdte[w_debiet > 400, debiet := '(300,400]']
   
   # retrieve kP from meta-model PCditch ----
   
-  # make local copy and simplify debiet column name
+  # make local copy and simplify 
   dbnomogram <- copy(nomogram)
-  setnames(dbnomogram,"debiet (mm/dag)","debiet",skip_absent=TRUE)
-  
+  setnames(dbnomogram,c("debiet (mm/dag)","bodemtype"),c("debiet","bodem"),skip_absent=TRUE)
   # add depth category, similar to dbhybi dataset
   dbnomogram[,watdteF := cut(watdte_m, breaks = c('0','0.3','0.5','0.7','7.0'))]
+  dbnomogram[,debiet := cut(debiet, breaks = c('0','7','17','29','36','50','60','70','80','90','100','200','300','400'))]
+  dbnomogram <- dbnomogram[,.(kP = mean(kP,na.rm = TRUE)),by=c('bodem','watdteF','debiet')]
   
-  # model to predict kP as function of debiet (given soil and water depth)
-  m1 <- lm(kP~bodemtype*watdteF*debiet*I(debiet^0.5)*I(debiet^2)*I(debiet^3),data=dbnomogram)
-  
-  # predict kP for dataset (suppress warnings ivm rank-deficient fit)
-  suppressWarnings(dgwatdte[,kPDitch := predict(m1,newdata = data.frame(debiet = w_debiet, bodemtype = tolower(bodem), watdteF = watdteF))])
+  # couple nomogram
+  dgwatdte <- merge(dgwatdte, dbnomogram, by = c('bodem','watdteF','debiet'), all.x = TRUE)
   
   # calc critical P-concentration
-  dgwatdte[,PvskPDitch := wp_min_sum / kPDitch]
+  dgwatdte[,PvskPDitch := wp_min_sum / kP]
   
   # koppel kp plassen obv invoertabel per EAG ----
   
@@ -199,7 +201,7 @@ ppr_pmaps <- function(dat, Overzicht_kp, hybi, nomogram, meanSoil, pYEAR = FALSE
   cols <- colnames(kP_plas)[grepl('^pc_|^lake|^p_bel|^EAG|^GAF$',colnames(kP_plas))]
   
   # merge per EAG and per GAF, and combine both (assuming its either EAG or GAF)
-  pvskp <- merge.data.table(dgwatdte[watertype %in% c('M20','M27','M25',"M14") & !is.na(EAGIDENT), !c('GAFIDENT')],
+  pvskp <- merge.data.table(dgwatdte[watertype %in% c('M20','M27','M25',"M14",'M11') & !is.na(EAGIDENT), !c('GAFIDENT')],
                                  kP_plas[,mget(cols)], by.x='EAGIDENT', by.y='EAG',all.y = TRUE, all.x = FALSE)
   
   # merge plas kP with original water balance db
@@ -209,6 +211,9 @@ ppr_pmaps <- function(dat, Overzicht_kp, hybi, nomogram, meanSoil, pYEAR = FALSE
   # calc PvskP for lakes
   dgwatdte[!is.na(p_bel_year),wp_min_sum := p_bel_year]
   dgwatdte[,PvskPlake := wp_min_sum / pc_helder_troebel]
+  dgwatdte[is.na(lake_ditch_vol),lake_ditch_vol := 'pc_ditch']
+  dgwatdte[lake_ditch_vol %in% c('lake','lake; empirisch'),lake_ditch_vol := 'pc_lake']
+  
   
   # remove rows without estimated P-belasting
   dgwatdte <- dgwatdte[!is.na(dgwatdte$pol) & !is.na(dgwatdte$wp_min_sum ),] 
@@ -342,7 +347,6 @@ beschrijvingtrend <- function(ekrtrendeag){
   
   return(ekr_scores_trendbesc)
 }
-
 # create data for dashboard schoon water AGV
 createDashboarddata <- function(ekrlijst, minjaar = 2006, trendjaar = 2017, outdir = outdir){
   # make local copy (only within this function)
@@ -401,17 +405,16 @@ createDashboarddata <- function(ekrlijst, minjaar = 2006, trendjaar = 2017, outd
 }
 
 # calculate mean wq data
-calcMeanWq <- function(wq.sel = wq.sel, nyears = 3, smonth = 1:12, pEAG = TRUE, pYEAR = TRUE, pSEASON = TRUE){
+calcMeanWq <- function(wq.sel = wq.sel, nyears = 3, smonth = 4:9, pEAG = TRUE, pYEAR = TRUE, pSEASON = TRUE){
   
   # make local copy
   b = copy(wq.sel) 
   
-  # adjust fews parameter names
-  b[,parameterid := gsub("/","_",parameterid)]
-  
   # add dynamic grouping variable depening on function input
-  groups <- c('compartiment','EAGIDENT','watertype')
-  if(pSEASON){groups <- c(groups,'season')}
+  groups <- c('parameterid','compartiment','EAGIDENT','watertype')
+  if(pSEASON){
+    b[,season := fifelse(maand %in% smonth,'summer','winter')]
+    groups <- c(groups,'season')}
   
   # add year number and take only nyears most recent years (selection per EAG)
   b <- b[,yearid := frank(-jaar,ties.method = 'dense'), by = groups][yearid <= nyears]
@@ -422,10 +425,10 @@ calcMeanWq <- function(wq.sel = wq.sel, nyears = 3, smonth = 1:12, pEAG = TRUE, 
   if(!pEAG){
     b <- b[,lapply(.SD, mean),.SDcols = cols[!cols =='jaar'],by= c(groups,'locatie','jaar')]}
   # calculate median value per location nyear average
-  if(!pYEAR & !pEAG){ b <- b[,lapply(.SD, mean),.SDcols = cols,by= c(groups,'locatie')]}
+  if(!pYEAR & !pEAG){b <- b[,lapply(.SD, mean),.SDcols = cols,by= c(groups,'locatie')]}
   # calculate gemiddelde EKR for each EAG en jaar
-  if(pYEAR & pEAG){b <- b[,as.list(unlist(lapply(.SD, function(x) list(mean= mean(x, na.rm = TRUE),perc= quantile(x,0.8, na.rm = TRUE))))),.SDcols = cols,by= c(groups, 'jaar')]}
-  if(!pYEAR & pEAG){b <- b[,as.list(unlist(lapply(.SD, function(x) list(mean= mean(x, na.rm = TRUE),perc= quantile(x,0.8, na.rm = TRUE))))),.SDcols = cols,by= c(groups)]}
+  if(pYEAR & pEAG){b <- b[,as.list(unlist(lapply(.SD, function(x) list(mean= mean(x, na.rm = TRUE),median=median(x, na.rm = TRUE),perc= quantile(x,0.8, na.rm = TRUE))))),.SDcols = 'meetwaarde',by= c(groups, 'jaar')]}
+  if(!pYEAR & pEAG){b <- b[,as.list(unlist(lapply(.SD, function(x) list(mean= mean(x, na.rm = TRUE),median=median(x, na.rm = TRUE),perc= quantile(x,0.8, na.rm = TRUE))))),.SDcols = 'meetwaarde',by= c(groups)]}
   
   # return database
   return(b)

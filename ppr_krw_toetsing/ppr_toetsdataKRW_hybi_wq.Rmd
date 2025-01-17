@@ -1,5 +1,5 @@
 ---
-title: "Nabewerking Aquo-kit gegevens hydrobiologie voor vervolganalyse"
+title: "Bewerking hydobiologie, fysische-chemische, waterbodemchemische en Aquo-kit gegevens voor vervolganalyse"
 subtitle: "Generen gegevens voor dashboard Gezond Water, KRW app en andere visualisaties"
 date: "`r Sys.Date()`"
 documentclass: book
@@ -45,25 +45,70 @@ source('./scripts/import_data.R')
 source('./scripts/validation.R')
 ```
 
+# Brondata EAGs
+
+```{r}
+# Preprocess EAG data -----------------------------------------------------
+# Load base layer with EAGs 
+EAG <- st_read(paste0('./input/',snapshot,'/gebiedsinfo/EAGS_met_wateroppervlaktes/EAGs_met_wateroppervlaktes.shp')) %>% st_transform(28992)
+setDT(EAG)
+# load relation eag with KRW 
+eag_krw <- data.table::fread(paste0('./input/', snapshot, '/gebiedsinfo/EAG_KRW_03042024.csv'))
+EAG <- merge(EAG, eag_krw, by = 'GAFIDENT', all.x =TRUE)
+# rename/ correct names which are not loaded correct
+EAG[GAFIDENT == '6000-EAG-5', Naam := 'Noordzeekanaal IJ Amsterdamrijnkanaalboezem, Hoogspanningstrace']
+EAG[GAFIDENT == '4000-EAG-1', Naam := "'s-Gravelandsche vaartboezem, 's-Gravelandsche Vaart"]
+EAG[, Naam := gsub("Staatsbosbheer", "Staatsbosbeheer", Naam, fixed = TRUE)]
+EAG[, Naam := gsub("Staatbosbheer", "Staatsbosbeheer", Naam, fixed = TRUE)]
+#rename and add separate cols for EAG and afvoergebied
+EAG[,EAGIDENT := GAFIDENT]
+EAG[,GAFIDENT := sapply(strsplit(EAGIDENT, '-'), `[`, 1)]
+EAG[,GAFNAAM := sapply(strsplit(Naam, ','), `[`, 1)]
+EAG[,EAGNAAM := sapply(strsplit(Naam, ','), `[`, 2)]
+EAG[is.na(EAGNAAM),EAGNAAM := Naam]
+EAG[,watertype:= Wtype_BR]
+# remove whitspaces
+EAG[,EAGNAAM := trimws(EAGNAAM, whitespace = ",", which = 'right')]
+# validate if eagnames are unique by afvoergebied 
+EAG[,unique.eag := uniqueN(EAGIDENT), by = 'GAFIDENT']
+EAG[,unique.eag.nm := uniqueN(EAGNAAM), by = 'GAFIDENT']
+EAG[!unique.eag == unique.eag.nm| is.na(EAGNAAM), ] # if emty data table is returned, names are unique
+# validate if gafnames are unique by afvoergebied 
+EAG[,unique.gaf := uniqueN(GAFIDENT), by = 'GAFIDENT']
+EAG[,unique.gaf.nm := uniqueN(GAFNAAM), by = 'GAFIDENT']
+EAG[!unique.gaf == unique.gaf.nm| is.na(GAFNAAM), ] # if emty data table is returned, names are unique
+# add trimmed gafname for export/ save in folders
+EAG[, GAFNAAM_trim := gsub(" ", "", GAFNAAM, fixed = TRUE)]
+
+# data table
+eag_wl <- EAG
+# write 
+saveRDS(eag_wl, file = './data/eag_wl.rds')
+# geo file
+EAG <- st_as_sf(EAG)
+st_write(EAG, paste0('./data/EAG.gpkg'), append = FALSE)
+
+```
+
+# Basisdata/ domeinen
+
 ```{r algemeen data}
-# load location info used in multiple chunks below
-locaties <- data.table::fread(paste0('./input/', snapshot, '/gebiedsinfo/Location.csv'))
-# load info on EAG: names and relation with KRW (for the future: retrieve names from EAG map and relation KRW from separate table)
-eag_wl <- data.table::fread(paste0('./input/', snapshot, '/gebiedsinfo/EAG_Opp_kenmerken_03042024.csv'))
-eag_wl <- eag_wl[is.na(eag_wl$Einddatum),]
-eag_wl[,EAGIDENT := GAFIDENT]
-eag_wl[,GAFIDENT := sapply(strsplit(EAGIDENT, '-'), `[`, 1)]
-eag_wl[,EAGNAAM := GAFNAAM]
-eag_wl[,GAFNAAM := sapply(strsplit(EAGNAAM, ','), `[`, 1)]
+# load domains 2 match to data
 biotaxon <- data.table::fread(paste0('./input/', snapshot, '/biotaxon.csv'), fill = TRUE)
 parameter <- data.table::fread(paste0('./input/', snapshot, '/parameterid.csv'), fill = TRUE)
+locaties <- data.table::fread(paste0('./input/', snapshot, '/gebiedsinfo/Location.csv'), fill = TRUE)
 
 # merge location with eag table for waterbody and watertype (as long as location is not updated automatically)
-locaties <- merge(locaties, eag_wl[,c('EAGIDENT','GAFNAAM','KRW_SGBP3','watertype')], by = 'EAGIDENT', all.x = TRUE, all.y =FALSE)
-locaties[,OWMIDENT := NULL]
+locaties <- merge(locaties, eag_wl[,c('EAGIDENT','GAFNAAM','KRW_SGBP3','watertype')], by = 'EAGIDENT', all.x = TRUE, all.y =FALSE, suffixes = c('_locs','_eag'))
 # add GAF/ aan afvoergebied code (it is not correct in the table)
 locaties[,GAFIDENT := sapply(strsplit(EAGIDENT, '-'), `[`, 1)]
 locaties <- locaties[!is.na(CODE),]
+
+# validate EAG match with location
+#check if all EAGs in locaties are in EAG
+checkloc_EAG <- locaties[!EAGIDENT %in% unique(eag_wl$EAGIDENT),]
+#check if all EAGs in EAG are in locatie
+checkEAG_loc <- eag_wl[!EAGIDENT %in% unique(locaties$EAGIDENT),]
 
 ```
 
@@ -82,93 +127,33 @@ De inputgegevens die nodig zijn bestaan zowel uit invoergegevens die worden geï
 orderMaatlatten <- fread('./input/domeinen_krw/orderMaatlatten.csv', encoding = "Latin-1") 
 orderMaatlatten$GHPR <- trimws(orderMaatlatten$GHPR)
 ekrlijst <- importKRW(inputdir = paste0("./input/", snapshot,"/rapportagefiles"), locaties = locaties, eag_wl, orderMaatlatten)
-
+#check duplicates
+duplicate_ekrlijst <- ekrlijst[duplicated(ekrlijst, incomparables=FALSE, fromLast=TRUE, by=colnames(ekrlijst))|duplicated(ekrlijst, by=colnames(ekrlijst)),]
 # goals per EAG/ water body
 doelen <- data.table::fread(paste0("./input/", snapshot,'/Doelen.csv'))
 # load addition paramter/ taxa information from the aquo-kit
 sompar <- fread(paste0('./input/domeinen_krw/Somparametersamenstelling_updated_LM.csv'), encoding = "Latin-1") 
 # add KRW doelen/ goals of waterbodies
 ekrlijst <- ppr_ekr(ekrlijst, doelen = doelen, sompar = sompar) 
-#validate ekrdata
+#validate ekrdata 2 check how many monsters are used calculating an ekr per EAG
 krw_val <- val_ekrlijst(ekrlijst)
-# filter only eags were watertype is correct
-# Botshol 2011 waar zijn monsters eag 2 gebleven?
+eag_krw_check <- ekrlijst[is.na(EAGIDENT)&is.na(KRW_SGBP3),]
+# check watertype and EAGIDENT is unique
+eag_wt <- unique(ekrlijst[,c('EAGIDENT','KRWwatertype.code')])
+eag_wt[, n_eag:= uniqueN(KRWwatertype.code), by = 'EAGIDENT']
+eag_wt <- eag_wt[n_eag>1,]
+
+# wat er in toetsing 2024 niet goed gaat
+# Botshol 2011 geen monsters in eag 2 
 # stichts ankeveen 2006 idem?
 # vinkeveen eag 3 in 2006 weg?
 # Kievitsbuurt 2006 en 2010 mist
 # SAP, 3201-EAG-2 mist tm 2012: mogelijk omdat er alleen OW en geen EZ locaties zijn? 
-# OBT en het hol check
 
 saveRDS(ekrlijst, file= paste0("./data/krw/ekrlijst",".rds"))
 EKRset <- ekrlijst[Hoedanigheid.code == 'EKR',]
 
 ```
-
-# Brondata EAGs
-
-```{r}
-# Preprocess EAG data -----------------------------------------------------
-# Load base layer with EAGs 
-EAG <- st_read(paste0('./input/',snapshot,'/gebiedsinfo/EAGS_met_wateroppervlaktes/EAGs_met_wateroppervlaktes.shp')) %>% st_transform(28992)
-setnames(EAG,c("GAFIDENT" ,"Naam","Soort","Opp_EAG","Omschr" ,"Opmerking" , "Wtype_BR"  , "Wtype_Vast",  "geometry"),
-         c("EAGIDENT" ,"EAGNAAM","Soort", "EAGOPPVL", "OSMOMSCH" ,"OPMERKINGE" , "OWMTYPE"  , "OWMTYPE_WBP",  "geometry"))
-EAG <- setDT(EAG)
-# add GAF/ aan afvoergebied code
-EAG[,GAFIDENT:= sapply(strsplit(EAG$EAGIDENT, '-'), `[`, 1)]
-EAG[,GAFNAAM := sapply(strsplit(EAG$EAGNAAM, ','), `[`, 1)]
-# correct gaf names with ',' in their name, this should be corrected in input data
-EAG[GAFIDENT == '3070', GAFNAAM := 'Holland, Sticht, Voorburg en Polder het Honderd oost']
-EAG[EAGIDENT == '3070-EAG-2', EAGNAAM := 'deelgebied 2']
-EAG[EAGIDENT == '3070-EAG-1', EAGNAAM := 'Voorburg']
-EAG[GAFIDENT == '7000', GAFNAAM := 'IJmeer, Markermeer, Gooimeer en Eemmeer']
-EAG[GAFIDENT == '6000', GAFNAAM := 'Noordzeekanaal, IJ, Amsterdamrijnkanaalboezem']
-EAG[GAFIDENT == '8000', GAFNAAM := 'Rijnlands Boezem']
-EAG[EAGIDENT == '7000-EAG-1', EAGNAAM := 'IJmeer']
-EAG[EAGIDENT == '7000-EAG-2', EAGNAAM := 'Diemerzeedijk']
-EAG[EAGIDENT == '7000-EAG-3', EAGNAAM := 'deelgebied 3']
-EAG[EAGIDENT == '7000-EAG-3', EAGNAAM := 'deelgebied 4']
-# remove unclear names
-EAG[,EAGNAAM := gsub(", Nog opknippen in  EAG's", "", EAGNAAM)]
-EAG[,EAGNAAM := trimws(EAG$EAGNAAM, whitespace = ",", which = 'right')]
-# remove gafname
-EAG[,EAGNAAM := sapply(strsplit(EAG$EAGNAAM, ','), `[`, 2)]
-EAG[,EAGNAAM := gsub("^\\s+|\\s+$", "", EAGNAAM)]
-# add unique names
-EAG[,unique.eag := uniqueN(EAGIDENT), by = 'GAFIDENT']
-EAG[,unique.eag.nm := uniqueN(EAGNAAM), by = 'GAFIDENT']
-EAG[,EAGNAAM2 := sapply(strsplit(EAGIDENT, '-'), `[`, 3)]
-EAG[!unique.eag == unique.eag.nm| is.na(EAGNAAM), EAGNAAM := paste0('Deelgebied ',EAGNAAM2)]
-# correct different gafs, with same name, this should be corrected in input data
-EAG[GAFIDENT == '6110', GAFNAAM := 'Noorder IJpolder 2']
-EAG[, EAGNAAM := capitalize(EAGNAAM)]
-#correct names on request Waternet
-EAG[GAFIDENT == '2540', GAFNAAM := 'Polder Groot Mijdrecht']
-EAG[, EAGNAAM := gsub("Staatsbosbheer", "Staatsbosbeheer", EAGNAAM, fixed = TRUE)]
-EAG[, EAGNAAM := gsub("Staatbosbheer", "Staatsbosbeheer", EAGNAAM, fixed = TRUE)]
-# add trimmed gafname for folders
-EAG[, GAFNAAM_trim := gsub(" ", "", GAFNAAM, fixed = TRUE)]
-EAG<- EAG[!GAFNAAM == 'Geen EAG',]
-EAG<- EAG[!GAFNAAM == '3???',]
-EAG <- st_as_sf(EAG) %>% st_transform(28992)
-
-# merge EAG with KRW
-EAG <- merge(EAG, eag_wl[, c('EAGIDENT','KRW_SGBP3','KRWmonitoringslocatie_SGBP3','SGBP3_NAAM')], by = 'EAGIDENT', all.x = TRUE)
-
-st_write(EAG, paste0('./data/', '/EAG.gpkg'), append = FALSE)
-setDT(EAG)
-
-#check if all EAGs in locaties are in EAG
-checkEAG <- locaties[!EAGIDENT %in% unique(EAG$EAGIDENT),]
-#check if all EAGs in EAG are in locatie
-checkEAG_loc <- EAG[!EAGIDENT %in% unique(locaties$EAGIDENT),]
-#check if all EAGs in locaties are in EAG
-checkEAG <- eag_wl[!EAGIDENT %in% unique(EAG$EAGIDENT),]
-#check if all EAGs in locaties are in EAG
-checkEAG <- EAG[!EAGIDENT %in% unique(eag_wl$EAGIDENT),]
-
-
-```
-
 
 # Brondata hydrobiologie en waterkwaliteit
 
@@ -177,17 +162,19 @@ Hieronder staan een aantal functies om gegevens van hydrobiologie en fysisch che
 ```{r ppr hydrobiologie}
 # hybi data import
 hybi <- import_wqdata(path = paste0('./input/', snapshot, '/hybi/'), location = locaties, parameter = parameter, pattern = ".csv")
-
+srow <- unique(hybi$categorie)
+#check duplicate values
+# 2023 data is duplicate with different bemonsteringsprotocol
+duplicate_hybi <- hybi[duplicated(hybi, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","monsterident" ,"externereferentie","datum","analysecode","compartiment","biotaxonnaam","lengteklasse","levensstadium","levensvorm","verschijningsvorm","geslacht", "limietsymbool","meetwaarde","waardebewerkingsmethode","afronding"))|duplicated(hybi, by=c("parameterid","locatie","monsterident" ,"externereferentie","datum","analysecode","compartiment","biotaxonnaam","lengteklasse","levensstadium","levensvorm","verschijningsvorm","geslacht", "limietsymbool","meetwaarde","waardebewerkingsmethode","afronding")),]
+hybi <- hybi[!duplicated(hybi, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","monsterident" ,"externereferentie","datum","analysecode","compartiment","biotaxonnaam","lengteklasse","levensstadium","levensvorm","verschijningsvorm","geslacht", "limietsymbool","meetwaarde","waardebewerkingsmethode","afronding"))]
 # post process chemical data (take only relevant categories, which differs for each type of analysis) 4 use in atlas_toestand
-hybi <- ppr_wqdata(hybi, syear = 1900, srow= c("HYBIO","IONEN","NUTRI","ALG","VELD","ALGEN","LICHT","MONSVAR","METAL","NUTRI_KRWTOETS","ALG_KRWTOETS","ALGEN_KRWTOETS","HYBIO_KRWTOETS","KRWTOETS","IONEN_KRWTOETST", "VELD_KRWTOETST"))
+hybi <- ppr_wqdata(hybi, syear = 1900, srow= srow)
 hybi <- hybi[!meetwaarde == -999,]
-
 # data pre processing-------------------------------------------------------
 # merge with taxoninfo
 hybi <- hybi[,grep('TWN ', colnames(hybi)):= NULL]
 hybi <- merge(hybi, biotaxon[,-c('datum','geslacht','levensvorm')], by.x = 'biotaxonnaam', by.y = 'code', all.x = TRUE)
 setnames(hybi, c("biotaxonnaam","naam"),c("biotaxonnaam_oud","biotaxonnaam"))
-
 # write hybi.rds
 saveRDS(hybi, file = './data/hybi.rds')
 # readRDS('./data/hybi.rds')
@@ -196,10 +183,20 @@ saveRDS(hybi, file = './data/hybi.rds')
 ```{r import fychem}
 #import chemical data
 fychem <- import_wqdata(path = paste0('./input/', snapshot, '/fychem/'), location = locaties, parameter = parameter, pattern = '.txt|.csv')
+srow <- unique(fychem$categorie)
+#check duplicate records
+duplicate_fychem <- fychem[duplicated(fychem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","limietsymbool","meetwaarde","waardebewerkingsmethode","afronding"))|duplicated(fychem,  by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","limietsymbool","meetwaarde","waardebewerkingsmethode","afronding")),]
+# remove duplicates
+fychem <- fychem[!duplicated(fychem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","limietsymbool","meetwaarde","waardebewerkingsmethode","afronding"))]
 # post process chemical data (take only relevant categories, which differs for each type of analysis) 4 use in atlas_toestand
-fychem <- ppr_wqdata(fychem, syear = 1900, srow = c("HYBIO","IONEN","NUTRI","ALG","VELD","ALGEN","LICHT","REST","MONSVAR","METAL","NUTRI_KRWTOETS","ALG_KRWTOETS","ALGEN_KRWTOETS","HYBIO_KRWTOETS","KRWTOETS","IONEN_KRWTOETST", "VELD_KRWTOETST"))
+fychem <- ppr_wqdata(fychem, syear = 1900, srow = c("METAL","VELD","ALG","ALGEN_KRWTOETS","ALGEN","IONEN","LANTACT","IONEN_KRWTOETS", "LICHT","MONSVAR","HYBIO","NUTRI","NUTRI_KRWTOETS","ALG_KRWTOETS"))
 fychem  <- fychem[!meetwaarde == -999,]
+# uniform certain paramters
 fychem[parameterid == "Ntot_mgN_l_nf", parameterid:= "Ntot_mgN_l"]
+fychem[parameterid == "Cl_mg_l_nf", parameterid:= "Cl_mg_l"]
+fychem[parameterid == "CHLFa_ug_l" & analyseprotocol == 'A3020', parameterid:= "CHLFa_ug_l_spectro"]
+fychem[parameterid == "CHLFa_ug_l" & analyseprotocol == 'A3220', parameterid:= "CHLFa_ug/l_fluo"]
+   
 # write hybi.rds
 saveRDS(fychem, file = './data/fychem.rds')
 ```
@@ -207,8 +204,8 @@ saveRDS(fychem, file = './data/fychem.rds')
 ```{r impor bodchem}
 #import chemical data
 bodchem <- import_wqdata(path = paste0('./input/', snapshot, '/bodemchemie/'), location = locaties, parameter = parameter, pattern = '.txt')
-duplicate_bod <- bodchem[duplicated(bodchem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","datum","biotaxonnaam","limietsymbool","meetwaarde","afronding")),]
-
+#check duplicate records
+duplicate_bod <- bodchem[duplicated(bodchem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","compartiment","datum","biotaxonnaam","limietsymbool","meetwaarde","waardebewerkingsmethode","afronding")),]
 # post process chemical data
 bodchem <- ppr_wqdata(bodchem, syear = 1900, srow = c("IONEN","NUTRI","ALG","VELD","ALGEN","LICHT","MONSVAR","METAL","NUTRI_KRWTOETS","ALG_KRWTOETS","IONEN_KRWTOETS"))
 bodchem  <- bodchem[!meetwaarde == -999,]
@@ -225,7 +222,6 @@ write.table(hybi_val, file = paste("./output/valhybi",format(Sys.time(),"%Y%m%d%
 hybi_val2 <- val_hybi2(hybi)
 write.table(hybi_val, file = paste("./output/valhybicomp",format(Sys.time(),"%Y%m%d%H%M"),".csv", sep= ""), quote = FALSE, na = "", sep =';', row.names = FALSE)
 ```
-
 
 # Data KRW verwerken
 
@@ -268,7 +264,6 @@ write.table(trendekr.eag, file = paste("./output/trendekr.eag",format(Sys.time()
 ekrtrend <- trendekr.eag[aggregated == 'ja' & level == 1,] 
 # alleen scores per eag op hoofdmaatlatten
 ekrtrendeag <- trendekr.eag[!is.na(EAGIDENT) & level == 1,] 
-
 saveRDS(trendekr.eag, file = './data/krw/trendekreag.rds')
 saveRDS(ekrtrend, file = './data/krw/ekrtrend.rds')
 saveRDS(ekrtrendeag, file = './data/krw/ekrtrendeag.rds')
@@ -290,7 +285,6 @@ trendN_trendbesc <- dcast.data.table(setDT(trendN), EAGIDENT ~ locatie, value.va
 trendN_trendbesc[, mergetekst := do.call(paste, c(.SD, sep = " ")), .SDcols = 2:ncol(trendN_trendbesc)]
 # trim character columns from starting and ending space
 trendN_trendbesc$mergetekst <- gsub("^ *|(?<= ) | *$", "", trendN_trendbesc$mergetekst, perl = TRUE)
-
 # hier dcast om tabel met header kwaliteitslementen te maken
 trendP_trendbesc <- dcast.data.table(setDT(trendP), EAGIDENT ~ locatie, value.var = c("trend_beschr"), fill = "")
 # merge tekst
@@ -326,37 +320,64 @@ write.table(dashboard_data, file = paste("./output/ECOLOGIE_TOESTANDOORDEELTREND
  
 ```
 
+# Dataset voor IR-EGV app
+
+```{r}
+# selectie EGV, Cl, Ca
+# uniformeren Ca en Ca_nf
+# saveRDS(myData, file= "./data/theData.rds")
+```
+
 # Waterbalansen laden en bewerken
 
 ```{r eval = FALSE}
 # load data on Q and P from waterbalansen: set the project dir of were the excel files are located 
-dat <- loadBalances_lm(dir_bal = 'c:/Users/laura/SPRINGG/NMISite - Documents/Projecten/O 1900 - O 2000/1971.N.23 DAS Waternet ondersteuning ecologie/03. Data en resultaten/waterbalansen/')
+dat <- loadBalances_lm(dir_bal = 'c:/Users/laura/OneDrive - SPRINGG/Documents/Waternet_data/waterbalansen/')
 setDT(dat)
 dat[,date := as.POSIXct(paste0(jaar,"-",maand,"-01"), format = '%Y-%m-%d')]
 # add gebiedscodes per balance
 dat <- ppr_wbalfiles(dat, EAG = EAG)
+checkkopeleag_bal <- unique(dat[,c('GAFIDENT','EAGIDENT','pol','gebied','versie')])
+# aanpassingen koppeling EAG - balans handmatige correctie uitzonderingen
+dat[EAGIDENT == "2220-EAG-3", EAGIDENT := NA]
+dat[pol == "2220-EAG-3_F004.xlsx", EAGIDENT := "2220-EAG-3"]
+dat[EAGIDENT == "3300-EAG-9", EAGIDENT := NA]
+dat[pol == "3300-EAG-8-9_F002.xlsx", EAGIDENT := "3300-EAG-9_F002.xlsx"]
 # nonogram 4 calculation of kP based on metamodel PCditch
 nomogram <- data.table::fread('./input/waterstoffenbalansen/nomogram.csv')
 # datafile with P-load 2 overrule metamodel data and add known kP's from PClake
 Overzicht_kP <- data.table::fread('./input/waterstoffenbalansen/Overzicht_kP.csv')
-# bodemtype (kan beter opnieuw worden afgeleid obv bodemkaart)
-meanSoil <- readRDS("./input/waterstoffenbalansen/init.rds")
+# bodemtype (afgeleid obv bodemkaart 50)
+eag_bt <- st_read('./data/eag_bt.gpkg')
+gaf_bt <- st_read('./data/gaf_bt.gpkg')
 # aggregated waterbalancedata with critical loads
-pvskp <- ppr_pmaps(dat, Overzicht_kp, hybi, nomogram, meanSoil) 
-
+# still lots of NA in pcditch
+pvskp <- ppr_pmaps(dat, Overzicht_kp, hybi, nomogram, eag_bt,gaf_bt) 
 saveRDS(dat, file ='./data/dat.rds')
 saveRDS(pvskp, file ='./data/pvskp.rds')
+write.table(pvskp, paste0("output/pvskp_", Sys.Date(),".csv"), sep=";", dec=".", row.names=F)
 
 ```
 
 # BRP & Bodemschat
 
+Deze pre-processing laad bestanden met informatie over biogeochemie van percelen van de dataschijf van NMI. Zonder toegang tot deze schijf kan de pre-processing dus niet worden uitgevoerd, maar is er alleen toegang tot de dataproducten in de folder 'data'.
+
 ```{r}
 #bodemschat
-bodemschatAGV<- st_read("../data/bodemschatAGV.gpkg") %>% st_transform(proj4.rd)
+bodemschatAGV<- st_read("./data/bodemschatAGV.gpkg") %>% st_transform(28992)
 # agrarische percelen
-brpAGV <- st_read('../data/brpAGV.gpkg')%>% st_transform(proj4.rd)
+brpAGV <- st_read('./data/brpAGV.gpkg')%>% st_transform(28992)
 gbrpAGV <- brpAGV %>% st_transform(proj4.google)
+# load data bodemkaart
+nmi_data <- paste0(gsub('\\\\', '/', Sys.getenv('USERPROFILE')), '/SPRINGG/Sven Verweij - NMI-DATA/')
+bt <- st_read(paste0(nmi_data, 'bodem/alterra/Bodemkaart50/products/bodemkaart50.gpkg'))%>% st_transform(28992)
+eag_bt <- st_crop(bt,st_bbox(EAG)); bt <- NULL
+gaf <- EAG %>% group_by(GAFIDENT, watertype) %>% summarise(geometry = sf::st_union(geom)) %>%  ungroup() %>% st_as_sf()
+gaf_bt <- st_join(gaf,eag_bt,largest = TRUE,left = TRUE)
+eag_bt <- st_join(EAG,eag_bt,largest = TRUE,left = TRUE)
+st_write(eag_bt,'./data/eag_bt.gpkg',append=FALSE)%>% st_transform(28992)
+st_write(gaf_bt,'./data/gaf_bt.gpkg',append=FALSE)%>% st_transform(28992)
 ```
 
 # Ecosysteemtoestanden
@@ -365,6 +386,8 @@ gbrpAGV <- brpAGV %>% st_transform(proj4.google)
 source('./scripts/EST_laura.R')
 # inlezen basis domeintabellen
 EST_omschrijving <- fread("./input/uitgangspunten/grenswaarden_est.csv", header = TRUE)
+EAG_kenmerken <- fread(paste0("./input/",snapshot, "/gebiedsinfo/EAG_kenmerken_20250114.csv"), header = TRUE)
+eag_wl <- merge(eag_wl, EAG_kenmerken, by.x = 'EAGIDENT', by.y = 'GAFIDENT', all.x = TRUE)
 
 # select vegetatie uit hybi
 veg_mons <- hybi$monsterident[hybi$analyse == 'PTN']
@@ -412,6 +435,7 @@ saveRDS(estout, file = './data/estmonster.rds')
 
 # aggregate per location
 estloc <- EST_aggloc(estout)
+setDT(eag_wl)
 estloc <- EST_addnameloc(estloc, eag_wl)
 saveRDS(estloc, file = './data/estloc.rds')
 
@@ -424,10 +448,11 @@ write.table(esteag, paste0("output/esteag_", Sys.Date(),".csv"), sep=";", dec=".
 
 # add toestandbeschrijving per EAG
 wqmeanEAG <- calcMeanWq(wq.sel = fychem, nyears = 5, smonth = 4:9, pEAG = TRUE, pYEAR = TRUE, pSEASON = FALSE)
+wqmeanEAG <- dcast(wqmeanEAG, EAGIDENT+jaar+compartiment~parameterid, value.var = 'meetwaarde.median')
+
 esteag[,lastyear := max(jaar), by = c('EAGIDENT')]
 esteag <- esteag[jaar == lastyear,]
-
-est_wq <- merge(esteag, wqmeanEAG, by=c('EAGIDENT','jaar'), all.x = TRUE)
+est_wq <- merge(esteag, wqmeanEAG[compartiment == 'OW',], by=c('EAGIDENT','jaar'), all.x = TRUE)
 toestandbeschrijving_eag <- toestandbeschrijving(est_wq)
 saveRDS(toestandbeschrijving_eag, file = './data/eagtoestandbeschrijving.rds')
 

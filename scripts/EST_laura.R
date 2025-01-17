@@ -320,16 +320,16 @@ kaartEKRmp <- function(dt = dt,
 
 
 toestandbeschrijving <- function(hybiest){
-  
-hybiest$toestandb <- paste0(hybiest$omschrijving.y, 
-                            ifelse(!is.na(hybiest$CHLFa_ug_l_spectro_CHLFa_.mean),
-                            ifelse(hybiest$CHLFa_ug_l_spectro_CHLFa_.mean > 25 & !is.na(hybiest$CHLFa_ug_l_blauwalg_CHLFa_blauwalg.mean) & hybiest$CHLFa_ug_l_blauwalg_CHLFa_blauwalg.mean > 12, paste0(" en er zaten veel blauwalgen in het water in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ". "),
-                            ifelse(hybiest$CHLFa_ug_l_spectro_CHLFa_.mean > 25 & !is.na(hybiest$CHLFa_ug_l_groenalg_CHLFa_groenalg.mean) & hybiest$CHLFa_ug_l_groenalg_CHLFa_groenalg.mean > 15, paste0(" en er zaten veel groenalgen in het water in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ". "),
-                            ifelse(hybiest$CHLFa_ug_l_spectro_CHLFa_.mean > 25, paste0(" en er zaten veel algen in het water in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ". " ), paste0(" en er zaten weinig algen in het water in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ". " )))), paste0(" in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ". ")),
-                            hybiest$omschrijving.x, " in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ".")
+  # hybiest <- est_wq
 
-hybiest <- hybiest[,c("EAGIDENT","jaar", "SUBMS","FLAB","KROOS","n_soort_sub","n_emsoort","CHLFa_ug_l_spectro_CHLFa_.mean","CHLFa_ug_l_blauwalg_CHLFa_blauwalg.mean","CHLFa_ug_l_groenalg_CHLFa_groenalg.mean","toestandb")]
-return(hybiest)
+  hybiest$toestandb <- paste0(hybiest$omschrijving.y, 
+                            ifelse(!is.na(hybiest$CHLFa_ug_l_spectro),
+                            ifelse(hybiest$CHLFa_ug_l_spectro > 25 & !is.na(hybiest$CHLFa_ug_l_blauwalg) & hybiest$CHLFa_ug_l_blauwalg > 12, paste0(" en er zaten veel blauwalgen in het water in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ". "),
+                            ifelse(hybiest$CHLFa_ug_l_spectro > 25 & !is.na(hybiest$CHLFa_ug_l_groenalg) & hybiest$CHLFa_ug_l_groenalg > 15, paste0(" en er zaten veel groenalgen in het water in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ". "),
+                            ifelse(hybiest$CHLFa_ug_l_spectro > 25, paste0(" en er zaten veel algen in het water in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ". " ), paste0(" en er zaten weinig algen in het water in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ". " )))), paste0(" in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ". ")),
+                            hybiest$omschrijving.x, " in ", hybiest$jaar, " in ", hybiest$EAGIDENT, ".")
+  hybiest <- hybiest[,c("EAGIDENT","jaar", "SUBMS","FLAB","KROOS","n_soort_sub","n_emsoort","CHLFa_ug_l_spectro","CHLFa_ug_l_blauwalg","CHLFa_ug_l_groenalg","toestandb")]
+  return(hybiest)
 }
 
 toestandbeschrijving_uitgebreid <- function(hybiest){
@@ -338,16 +338,16 @@ toestandbeschrijving_uitgebreid <- function(hybiest){
                               ". In ", hybiest$jaar, " zijn de mediane bedekkingen met onderwaterplanten, drijvende draadalgen en kroos respectievelijk ", round(hybiest$SUBMS, 1),
                               ", ", round(hybiest$FLAB,1)," en ",round(hybiest$KROOS,1), "%",
                               ". Het mediane aanal soorten onderwaterplanten per meetlocatie is ", as.integer(hybiest$n_soort_sub),
-                              ifelse(!is.na(hybiest$CHLFa_ug_l_spectro_CHLFa_.mean),
-                                     ifelse(hybiest$CHLFa_ug_l_spectro_CHLFa_.mean > 25 & !is.na(hybiest$CHLFa_ug_l_blauwalg_CHLFa_blauwalg.mean) & hybiest$CHLFa_ug_l_blauwalg_CHLFa_blauwalg.mean > 12, paste0(". In ", hybiest$jaar, "zaten er veel blauwalgen in het water. "),
-                                            ifelse(hybiest$CHLFa_ug_l_spectro_CHLFa_.mean > 25 & !is.na(hybiest$CHLFa_ug_l_groenalg_CHLFa_groenalg.mean) & hybiest$CHLFa_ug_l_groenalg_CHLFa_groenalg.mean > 15, paste0(". In ", hybiest$jaar, "zaten er veel groenalgen in het water. "),
-                                                   ifelse(hybiest$CHLFa_ug_l_spectro_CHLFa_.mean > 25, paste0(". In ", hybiest$jaar, " zaten er veel algen in het water. "),paste0(". In ", hybiest$jaar, " zaten er weinig algen in het water. " )))),". "),
+                              ifelse(!is.na(hybiest$CHLFa_ug_l_spectro),
+                                     ifelse(hybiest$CHLFa_ug_l_spectro > 25 & !is.na(hybiest$CHLFa_ug_l_blauwalg) & hybiest$CHLFa_ug_l_blauwalg > 12, paste0(". In ", hybiest$jaar, "zaten er veel blauwalgen in het water. "),
+                                            ifelse(hybiest$CHLFa_ug_l_spectro > 25 & !is.na(hybiest$CHLFa_ug_l_groenalg) & hybiest$CHLFa_ug_l_groenalg > 15, paste0(". In ", hybiest$jaar, "zaten er veel groenalgen in het water. "),
+                                                   ifelse(hybiest$CHLFa_ug_l_spectro> 25, paste0(". In ", hybiest$jaar, " zaten er veel algen in het water. "),paste0(". In ", hybiest$jaar, " zaten er weinig algen in het water. " )))),". "),
                               hybiest$omschrijving.x,
                               ". De mediane bedekking met emerse planten was in ",  hybiest$jaar, " ",round(hybiest$emers,1),
                               "% en het mediane aanal soorten natte oeverplanten (emerse planten) per meetlocatie was ", as.integer(hybiest$n_emsoort),
                               ".")
   
-  hybiest <- hybiest[,c("EAGIDENT","jaar", "SUBMS","FLAB","KROOS","n_soort_sub","n_emsoort","CHLFa_ug_l_spectro_CHLFa_.mean","CHLFa_ug_l_blauwalg_CHLFa_blauwalg.mean","CHLFa_ug_l_groenalg_CHLFa_groenalg.mean","toestandb")]
+  hybiest <- hybiest[,c("EAGIDENT","jaar", "SUBMS","FLAB","KROOS","n_soort_sub","n_emsoort","CHLFa_ug_l_spectro","CHLFa_ug_l_blauwalg","CHLFa_ug_l_groenalg","toestandb")]
   return(hybiest)
 }
 

@@ -283,18 +283,19 @@ ppr_mapPpercWatb(ret, gEAG,param = 'p_retentie')
 
 # Overig 
 
-```{r plots wateroeverptn waarde per soort}
+```{r plots wateroeverptn indicatiewaarde per soort}
 for(i in unique(ekrlijst$EAGIDENT)){
-
+  # i <- unique(ekrlijst$EAGIDENT)[1]
   krw <- ekrlijst[EAGIDENT %in% i,]
   
   if(!"OEVPTN" %in% unique(krw$Somparameter.code)){
   plot <- fractie_score_taxa_nsoort(krw, pars = c("WATPTN","MFT_srtscore", "MACFT"), titel = 'water- en oeverplanten')
-  plot<- annotate_figure(plot, top = text_grob("Aantal en kwaliteit van verschillende soorten", face = "bold", size = 14))
-  annotate_figure(plot, left = text_grob("gemiddeld aantal soorten per meetlocatie", rot = 90, size = 11))
+  plot <- annotate_figure(plot, top = text_grob("Aantal en kwaliteit van verschillende soorten", face = "bold", size = 14))
+  plot <- annotate_figure(plot, left = text_grob("gemiddeld aantal soorten per meetlocatie", rot = 90, size = 11))
+  ggplot2::ggsave(plot,file=paste0('output/',i,'soortenWaterplanten.png'),
+                  width = 14, height = 10,units='cm',dpi=1000)
 }
-
-if("OEVPTN" %in% unique(krw$Somparameter.code)){
+  if("OEVPTN" %in% unique(krw$Somparameter.code)){
   p1<- fractie_score_taxa_nsoort(krw, pars = "OEVPTN", titel = '(natte) oeverplanten')
   p2<- fractie_score_taxa_nsoort(krw, pars = c("WATPTN","MFT_srtscore", "MACFT"), titel = '(onder)waterplanten')
   plot<- ggarrange(p1, p2, ncol=2, common.legend = TRUE, legend="bottom")
@@ -351,7 +352,6 @@ dt = krwloc[!grepl("aantalper*",krwloc$GHPR, fixed =F) & krwloc$wbmethode == "ml
 
 #oefenset
 dt <- dt[dt$gebied %in% c('2120','2501','4100','2400'),]
-
 gebieden <- unique(dt$gebied)
 gEAG <- EAG %>% st_transform(4326)
 # shape met al het water in EAG
@@ -399,23 +399,23 @@ write.table(planten, file = 'best_sites.csv', sep = ';', dec = '.')
 # Summer mean wq on locations were measures were measures are executed
 # wq.sel$season == "summer" 
 
-plot <- ggplot(data= wq.sel[wq.sel$fewsparameter == "CHLFa_ug_l" & wq.sel$locatiecode %in% c( 'BOT002') & wq.sel$jaar < 2022,], aes(x=jaar, y=meetwaarde, col= locatiecode, fill = locatiecode, group = jaar))+
+plot <- ggplot(data = wq[parameterid == "CHLFa_ug_l_spectro" & locatie %in% c( 'BOT001','BOT002'),], aes(x=jaar, y=meetwaarde, col= locatie, fill = locatie, group = jaar))+
     geom_point(stat = "summary", fun = "mean")+
     geom_line(stat = "summary", fun = "mean")+   
     #facet_wrap(.~fewsparameter)+
     theme_minimal()+
-    ggtitle('')+ ylab('Chlorofyl-A (ug/l)')+ xlab('jaar')+
+    ggtitle('')+ ylab('')+ xlab('jaar')+
     theme (axis.text.x =element_text(angle=90, vjust=1))
 ggplotly(p=plot)
 
 
-
-plot <- ggplot(data= wq[wq$fewsparameter == "Ptot_mgP_l" & wq$locatiecode %in% c( 'OBT006','PMW057', 'PMW052') & wq$jaar >2015,], aes(x=datum, y=meetwaarde, col= locatiecode, fill = locatiecode))+
+wq <- fychem
+plot <- ggplot(data= wq[parameterid == "Ptot_mgP_l" & locatie %in% c( 'PKH020') & jaar >2015,], aes(x=datum, y=meetwaarde, col= locatie, fill = locatie))+
     geom_point()+
     geom_line()+
     #facet_wrap(.~fewsparameter)+
     theme_minimal()+
-    ggtitle('')+ ylab('Totaal fosfor (mg/l)')+ xlab('datum')+
+    ggtitle('')+ ylab("")+ xlab('datum')+
     theme (axis.text.x =element_text(angle=90, vjust=1))
 ggplotly(p=plot)
 
@@ -821,8 +821,7 @@ ggplot() +
 ```
 
 ```{r waterbodem, include=FALSE, eval = FALSE}
-
-# subset gebieden
+# subset gebieden voor prioritering agrarisch
 prio <- gEAG[gEAG$prio4 > 0.9,] # methode 1, alleen agrarische EAGs
 #stedelijk prio
 prio <- gEAG[gEAG$EAGIDENT %in% stedEAG$EAGIDENT,]
@@ -830,9 +829,9 @@ prio <- gEAG[gEAG$EAGIDENT %in% stedEAG$EAGIDENT,]
 prio <- gEAG[gEAG$EAGIDENT %in% ovEAG$EAGIDENT,]
 prio <- prio[!is.na(prio$EAGIDENT),]
 prio <- merge(prio, bod.sel.wide.eag, by.x = 'GAFIDENT', by.y ='EAGIDENT', all.x = TRUE, all.y = FALSE) 
-
 # bodem probleem waar PvskP < 1, want anders moet belasting eerst worden aangepakt
 prio <- prio[prio$PvskPDitch < 1,]
+
 binpal <- colorBin("Blues", prio$doorz_diep, bins = 7, pretty = TRUE)
 
 leaflet() %>%
@@ -866,6 +865,65 @@ leaflet() %>%
     addLegend("bottomright", colors= col, labels=labels, title = 'Ptot mgP/kg DG') %>%
     addTiles()
 
+selb[,Fe_S_PW := FESPPWratio_FeS]
+selb[FESPPWratio_FeS > 15,Fe_S_PW := 15]
+ggplot(selb, aes(x= Ptot_mgP_l_nf_PW, y= Ptot_mgP_l_ng_SB, col = FESPPWratio ))+
+      scale_color_binned(breaks = c(0, 0.5,1,2.5,5,10,15), type = 'viridis')+
+      geom_jitter() +
+      theme_minimal()
+
+ggplot(selb, aes(x= Ptot_mgP_l_nf_PW, y= Fe_mg_l_nf_PW, col = FESPPWratio_FeS ))+
+      scale_color_binned(breaks = c(0, 0.5,1,2.5,5,10,15), type = 'viridis')+
+      geom_jitter() +
+      theme_minimal()
+
+bodekr <- merge(selb, ekrlijst[aggregated == 'ja',], by = c('EAGIDENT','jaar'))
+
+ggplot(bodekr[GHPR == "Soortensamenstelling macrofyten"], aes(x= Ptot_mgP_l_nf_PW, y= Numeriekewaarde, col = FESPPWratio_FeS ))+
+      scale_color_binned(breaks = c(0, 0.5,1,2.5,5,10,15), type = 'viridis')+
+      geom_jitter() +
+      theme_minimal()
+
+library(xgboost)
+library(caTools)
+library(dplyr)
+library(cvms)
+library(caret)
+
+set.seed(42)
+cols_num <- colnames(selb)[sapply(selb, is.numeric)]
+selb_n <- selb[,c(cols_num,'EAGIDENT'), with=FALSE]
+sample_split <- sample.split(Y = selb_n$Ptot_mgP_l_nf_PW, SplitRatio = 0.7)
+train_set <- subset(x = selb_n, sample_split == TRUE)
+test_set <- subset(x = selb_n, sample_split == FALSE)
+
+y_train <- as.integer(train_set$EAGIDENT) - 1
+y_test <- as.integer(test_set$EAGIDENT) - 1
+X_train <- train_set %>% select(-Ptot_mgP_l_nf_PW)
+X_test <- test_set %>% select(-Ptot_mgP_l_nf_PW)
+
+xgb_train <- xgb.DMatrix(data = as.matrix(X_train), label = y_train)
+
+xgb_test <- xgb.DMatrix(data = as.matrix(X_test), label = y_test)
+xgb_params <- list(
+  booster = "gbtree",
+  eta = 0.01,
+  max_depth = 8,
+  gamma = 4,
+  subsample = 0.75,
+  colsample_bytree = 1,
+  objective = "multi:softprob",
+  eval_metric = "mlogloss",
+  num_class = 5)
+
+
+xgb_model <- xgb.train(
+  params = xgb_params,
+  data = xgb_train,
+  nrounds = 5000,
+  verbose = 1
+)
+xgb_model
 
 ```
 

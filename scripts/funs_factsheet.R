@@ -16,7 +16,6 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
   
   # select data for water body and extract name
   if(any(wl %in% eag_wl$KRW_SGBP3)){
-    
     # als eenheid factsheet KRW wl
     eagwl <- eag_wl[KRW_SGBP3 %in% wl,]
     # extract the name as text after the first underscore
@@ -38,7 +37,12 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
   
   # get P load vs critical p load
   pvskpsel <- pvskp[EAGIDENT %in% eagwl$EAGIDENT | GAFIDENT %in% substr(eagwl$EAGIDENT, 1, 4),]
-  pvskpversie <- pvskpsel$lastyear
+  pvskpversie <- unique(pvskpsel$lastyear)
+  pvskpsel[,naam := ifelse(is.na(EAGIDENT), GAFIDENT, EAGIDENT)]
+  # select legenditems
+  cols <- c('pol','naam',colnames(pvskpsel)[grepl('^a_in', colnames(pvskpsel)) & sapply(pvskpsel, is.character)])
+  pvskp_legend <- pvskpsel[,mget(cols)]
+  pvskp_legend <- unique(pvskp_legend)[,pol := NULL]
   
   # get maatregelen
   maatregelen1 <- maatregelen[HoortbijKRWWaterlichaam2021 %in% wl,]
@@ -80,7 +84,7 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
   gEAG_sel <- EAG[EAG$EAGIDENT %in% eagwl$EAGIDENT, ]
   
   # get shape of water per eag
-  waterpereag_sel <- waterpereag1[waterpereag1$GAFIDENT %in% eagwl$EAGIDENT, ]
+  waterpereag_sel <- waterpereag[waterpereag$GAFIDENT %in% eagwl$EAGIDENT, ]
   
   # get deelgebieden
   deelgebieden <- as.data.table(eagwl[,c('EAGIDENT','GAFNAAM')])
@@ -208,10 +212,15 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
   if(nrow(ekr_scores1)> 0){
     # plot figure EKR
     mapEKR <- ppr_ekrplot(ekr_scores1)
+    # create plt met ekr scores in de tijd
+    # ongewogen scores obv koppeling locatie en EAG
+    z <- rbind(EKRset1[aggregated == 'ja',], EKRset1[aggregated == 'nee'& level == 3,])
+    plotEKRlijn <- plotEKRlijnfs(z)
   } else {
     # plot figure EKR when no data is available
     db <- data.frame()
     mapEKR = plotEmpty(db = db, type='plotekrplot')
+    plotEKRlijn <- plotEmpty(db = db, type='plotekrplot')
   }
   
   # save plot, and location where map is saved
@@ -219,11 +228,7 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
                             width = 20, height = 15, units='cm', dpi=1000)}
   mapEKR <- paste0('routput/',my_title2,'/mapEKR.png')
   
-  # create plt met ekr scores in de tijd
-  # ongewogen scores obv koppeling locatie en EAG
-  z <- rbind(EKRset1[aggregated == 'ja',], EKRset1[aggregated == 'nee'& level == 3,])
-  plotEKRlijn <- plotEKRlijnfs(z)
-  
+ 
   # --- Ecologische SleutelFactoren (ESF tabel) ------
   
   # ESF is doubled in columns: one string and one number, detect via lenght of the first row
@@ -347,7 +352,7 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
   if(nrow(hybi1[parameterid == 'WATDTE_m',])>0){
     
     # plot ESF 4
-    plotWaterdiepte = ppr_waterdieptesloot(hybi1[!is.na(parameterid == 'WATDTE_m'),], filter = c('WATDTE_m'))
+    plotWaterdiepte = ppr_waterdieptesloot(hybi1[!is.na(parameterid == 'WATDTE_m'),], filter = c('WATDTE_m','ZICHT_m'))
     class(plotWaterdiepte.ref) <- 'plotref'
   } else {
     
@@ -426,6 +431,7 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
               wqversie =wqversie,
               bodversie = bodversie,
               pvskpversie =pvskpversie,
+              pvskp_legend =pvskp_legend,
               toetsjaar = toetsjaar
   )
   
@@ -496,7 +502,6 @@ ppr_ekrplot <- function(ekr_scores1){
           legend.position = "right")
   return(plot)
 }
-
 # plot EKR background
 plotEKRlijnfs <- function(z, gebied = NULL){
 
@@ -504,33 +509,27 @@ plotEKRlijnfs <- function(z, gebied = NULL){
     z <- z[!is.na(z$EAGIDENT),]
     z$KRW_SGBP3 <- ""
   }
-
-  z <- z %>%
-    dplyr::arrange(GHPR_level) %>%               # sort your dataframe
-    dplyr::mutate(GHPR = factor(GHPR, unique(GHPR))) # reset your factor-column based on that order
-  z$jaar <- as.numeric(z$jaar)
-  z$Numeriekewaarde <- as.numeric(z$Numeriekewaarde)
-  z$facet_wrap_code <- as.character(z$facet_wrap_code)
-  z$wlmt <- ifelse(is.na(z$KRW_SGBP3)|z$KRW_SGBP3 == "", paste0(z$EAGIDENT," ",z$facet_wrap_code), z$facet_wrap_code)
-
-  z <- z %>%
-    dplyr::group_by(waterlichaam, wlmt ,GHPR , GHPR_level, level, jaar)%>%
-    dplyr::summarise_at(c('Numeriekewaarde'),mean)
-
-  z <- z %>%
-    ungroup(waterlichaam)
-
+  
+  z[order(GHPR_level)]
+  z[,jaar := as.numeric(jaar)]
+  z[,Numeriekewaarde := as.numeric(Numeriekewaarde)]
+  z[,facet_wrap_code := as.character(facet_wrap_code)]
+  z[,wlmt := ifelse(is.na(KRW_SGBP3)|KRW_SGBP3 == "", paste0(EAGIDENT," ",facet_wrap_code), facet_wrap_code)]
+  z <- dcast(z, waterlichaam+wlmt+GHPR+GHPR_level+level+jaar~., value.var = 'Numeriekewaarde', fun.aggregate=mean)
+  z[,Numeriekewaarde := `.`]
+  z[,maatlatniv := factor(level, levels = c("1","2","3"), labels = c("hoofdmaatlat","deelmaatlat","indicator"))]
+  
   ggplot(data= z, aes(x=jaar, y=Numeriekewaarde, col = GHPR, group = GHPR))+
     stat_summary(fun = "mean", geom = "point") +
     stat_summary(fun = "mean", geom = "line") +
     scale_y_continuous(limits= c(0, 1), breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1))+
-    scale_x_continuous(limits= c(2006, 2023), breaks=c(2006, 2008, 2010, 2012, 2014,2016,2018,2020))+
-    facet_grid(vars(level),vars(wlmt))+
+    scale_x_continuous(limits= c(2006, 2026), breaks=c(2006, 2008, 2010, 2012, 2014,2016,2018,2020,2022,2024))+
+    facet_grid(vars(maatlatniv),vars(wlmt))+
     ylab('')+xlab('')+
     guides(col=guide_legend(title="(Deel)maatlat: "))+
     theme_minimal()+
     theme(axis.ticks.x=element_blank(),
-          axis.line = element_line(),
+          axis.line = element_line(colour = "black"),
           strip.text.x = element_text(size = 9), 
           strip.text.y = element_text(size = 0.01), 
           axis.text.x = element_text(size= 10, angle = 45, vjust = 0.6), 
@@ -540,28 +539,32 @@ plotEKRlijnfs <- function(z, gebied = NULL){
           panel.grid.major.x = element_line(),
           panel.grid.minor.x = element_blank(),
           panel.grid.major.y = element_line(),
-          panel.grid.minor.y = element_line(),
+          panel.grid.minor.y = element_blank(),
           panel.background = element_blank(),
+          panel.border = element_rect(color = 'black', fill = NA),
           plot.background = element_blank(),
-          panel.ontop = F,
+          # panel.ontop = F,
           legend.title = element_text(size = 10),
           legend.text  = element_text(size = 10),
           legend.key.size = unit(0.9, "lines"),
           legend.position = "right")
-    
- 
 }
+
 # maak plot van p VS Kp
-ppr_pvskpplot <- function(pvskpsel){
+ppr_pvskpplot <- function(pvskpsel, lakeditch = 'ditch'){
 
   # make local copy
   d1 <- copy(pvskpsel)
  
   # colomns needed
-  cols <- colnames(d1)[!grepl('^a_in|^a_uit|^bodem|pol|EAGIDENT|GAFIDENT|GAFNAAM|watertype|watdteF|lake_ditch',colnames(d1))]
-
+  cols <- colnames(d1)[sapply(d1, is.numeric)]
+  cols_char <- colnames(d1)[sapply(d1, is.character)]
+  
   # estimate mean by name and select only those with a name
-  d1 <- d1[,lapply(.SD,mean,na.rm=T),.SDcols = cols, by=c('pol','EAGIDENT','GAFIDENT','GAFNAAM','watertype')][!is.na(pol)]
+  d1 <- d1[,lapply(.SD,mean,na.rm=T),.SDcols = cols, by=c('pol','EAGIDENT',
+                                                          "a_inlaat1","a_inlaat2","a_inlaat3","a_inlaat4","a_inlaat5",
+                                                          "a_uitlaat1","a_uitlaat2","a_uitlaat3","a_uitlaat4",
+                                                          "GAFIDENT","lake_ditch_vol")][!is.na(pol)]
 
   # set measurement to zero when not available
   d1[is.na(wp_meting_mgm2d), wp_meting_mgm2d := 0]
@@ -572,26 +575,28 @@ ppr_pvskpplot <- function(pvskpsel){
   colWat <- paste(c(colWat2,"yellow", colWat1))
 
   # select columns
-  cols <- colnames(d1)[grepl('^pol|EAGIDENT|GAFIDENT|^wp_|^kPDi|^pc_helder|^watertype',colnames(d1))]
+  cols <- colnames(d1)[grepl('^pol|EAGIDENT|GAFIDENT|^wp_|^kP|^pc_helder|^lake_ditch_vol',colnames(d1))]
   cols <- cols[!grepl('_sum$|_gm3$',cols)]
   d1 <- d1[,mget(cols)][,wp_meting_mgm2d := -wp_meting_mgm2d]
 
   # reshape data.table for figure
-  d2 <- melt.data.table(d1,id.vars = c('pol','EAGIDENT','GAFIDENT','kPDitch','pc_helder_troebel','watertype'),
+  d2 <- melt.data.table(d1,id.vars = c('pol','EAGIDENT','GAFIDENT','kP','pc_helder_troebel','lake_ditch_vol'),
         variable.name = 'source',value.name = 'value', variable.factor = FALSE)
-  d2$kP <- ifelse(d2$watertype %in% c('M14','M27','M20','M25','M11'), d2$pc_helder_troebel, d2$kPDitch)
+  d2$kP_comb <- ifelse(!is.na(d2$pc_helder_troebel), d2$pc_helder_troebel, d2$kP)
   d2[,naam := ifelse(is.na(EAGIDENT), GAFIDENT, EAGIDENT)]
-  d2[,`Kritische belasting` := kP]
- 
+  
+  
   # plot figure
   plot <- ggplot() +
     geom_bar(data = d2, inherit.aes = FALSE, aes(x = naam, y = value, fill = source), stat = 'identity') +
-    scale_fill_manual("Bronnen (minimaal = min, incrementeel = inc)", values = colWat, guide = guide_legend(override.aes = list(size = 7)))+
-    geom_point(inherit.aes = FALSE, data= d2, aes(x = naam, y= kP, col = "Kritische belasting"), shape = 95, size = 20) + 
-    scale_color_manual(name = "", values= "black")+
+    scale_fill_manual("Bronnen (minimaal = min, incrementeel = inc)", values = colWat, 
+                      guide = guide_legend(override.aes = list(size = 7)))+
+    geom_point(inherit.aes = FALSE, data= d2, aes(x = naam, y= kP_comb, col = lake_ditch_vol), shape = 95, size = 20) + 
+    guides(col=guide_legend(title="Kritische belasting op basis van"))+
+    scale_color_manual(name = "", values= c('black','darkgrey','grey'))+
     xlab('') + ylab('mg P/m2/dag')+
     ggtitle("Fosfor- en kritische fosforbelasting per deelgebied")+
-    theme_classic() +
+    theme_minimal() +
     theme(axis.ticks.x=element_blank(),
           axis.line = element_line(),
           strip.text.x = element_text(size = 9), 
@@ -611,7 +616,7 @@ ppr_pvskpplot <- function(pvskpsel){
     
 
   return(plot)
-}
+  }
 # make empty plots for factsheets when data is missing
 plotEmpty <-function(db,type){
 
@@ -791,18 +796,20 @@ ppr_extinctie <- function(wq1, hybi1, filter = c('EXTTCEFCELBT__m_L400-700nm', '
 
 }
 
-ppr_waterdieptesloot <- function(hybi1, filter = c('WATDTE_m')){
+ppr_waterdieptesloot <- function(hybi1, filter = c('WATDTE_m','ZICHT_m')){
 
   # diepte4licht <- log(25)/1.2
   hybi2 <- hybi1[parameterid %in% filter & jaar == max(jaar),]
-
   # remove values that cannot exists (negative depths)
   hybi2[meetwaarde < 0, meetwaarde := NA]
-
-  p <- ggplot(hybi2, aes(x= EAGIDENT, y= meetwaarde, col = watertype))+
-    geom_boxplot() +
-    theme_minimal()+ scale_y_reverse(limits=c(max(hybi2$meetwaarde)+0.1,0)) +
-    guides(col=guide_legend(title="KRW watertype"))+
+  
+  p <-
+    ggplot()+
+    geom_boxplot(data = hybi2,aes(x= EAGIDENT, y= meetwaarde, col = parameterid_naam)) +
+    # geom_boxplot(data = dz,aes(x= EAGIDENT, y= meetwaarde, col = watertype)) +
+    theme_minimal()+ 
+    scale_y_reverse(limits=c(max(hybi2$meetwaarde)+0.1,0)) +
+    guides(col=guide_legend(title="Parameter"))+
     theme(
       strip.background = element_blank(),
       axis.text.x = element_text(angle = 30, hjust =1),
@@ -817,7 +824,7 @@ ppr_waterdieptesloot <- function(hybi1, filter = c('WATDTE_m')){
       legend.key.size = unit(0.9, "lines"),
       legend.position = "right")+
     ggtitle('') +
-    labs(x= '', y = 'waterdiepte (m)\n')
+    labs(x= '', y = 'diepte (m)')
 
   # return
   return(p)
@@ -827,59 +834,62 @@ ppr_plotbod <- function(bod1, type='grid'){
 
   # dcast slootbodem
   selb <- dcast.data.table(bod1, EAGIDENT+locatie+datum+jaar ~ parameterid+compartiment, value.var = "meetwaarde", fun.aggregate = mean)
-
+  selb[,FESPDWratio := (Fe_mg_kg_dg_SB/55.845 - Stot_mgS_kg_dg_SB/32.065)/(Ptot_gP_kg_dg_SB*1000/30.974)]
+  selb[,FESPDWratio_FeP := (Fe_mg_kg_dg_SB/55.845)/(Ptot_gP_kg_dg_SB*1000/30.974)]
+  
   # calculate relevant ratios
   if(is.null(selb$Stot_mgS_mg_l_ng_SB)){
-  selb[,FESPFWratio := (Fe_mg_kg_dg_SB/55.845 - Stot_mgS_kg_dg_SB/32.065)/(Ptot_gP_kg_dg_SB*1000/30.974)]}
+    selb[,FESFWratio := FESPDWratio]}
   if(!is.null(selb$Stot_mgS_mg_l_ng_SB)){
-  selb[,FESPFWratio := (Fe_mg_l_ng_SB/55.845 - Stot_mgS_l_ng_SB/32.065)/(Ptot_mgP_l_ng_SB/30.974)]}
+    selb[,FESPFWratio := (Fe_mg_l_ng_SB/55.845 - Stot_mgS_l_ng_SB/32.065)/(Ptot_mgP_l_ng_SB/30.974)]}
 
   # convert iron into similar parcode
-  if(is.null(selb$Fe_mg_l_nf_PW)){
+  if(is.null(selb$Fe_mg_l_nf_PW)&!is.null(selb$Fe_mg_l_PW)){
     selb$Fe_mg_l_nf_PW <- selb$Fe_mg_l_PW
   }
-  if(is.null(selb$Ptot_mgP_l_nf_PW)){
+  if(is.null(selb$Ptot_mgP_l_nf_PW)&!is.null(selb$Ptot_mgP_l_PW)){
     selb$Ptot_mgP_l_nf_PW <- selb$Ptot_mgP_l_PW
+  }
+  if(is.null(selb$Stot_mgS_l_nf_PW)&!is.null(selb$Stot_mgS_l_PW)){
+    selb$Stot_mgS_l_nf_PW <- selb$Stot_mgS_l_PW
   }
   
   # add SP-ratio
-  if(is.null(selb$Stot_mgS_l_PW & selb$Stot_mgS_l_nf_PW)){
+  if(is.null(selb$Stot_mgS_l_nf_PW)&!is.null(selb$SO4_mg_l_nf_PW)){
     selb[!is.na(SO4_mg_l_nf_PW), FESPPWratio := (Fe_mg_l_nf_PW/55.845 - SO4_mg_l_nf_PW/96.06)/(Ptot_mgP_l_nf_PW/30.974)]
-    selb[!is.na(SO4_mg_l_nf_PW), FESPPWratio_FeS := (Fe_mg_l_nf_PW/55.845)/(SO4_mg_l_PW/96.06)]
-    selb[!is.na(SO4_mg_l_nf_PW), FESPPWratio_FeP := (Fe_mg_l_nf_PW/55.845)/(Ptot_mgP_l_nf_PW/30.974)]
-  }
-  if(is.null(selb$Stot_mgS_l_nf_PW) & !is.null(selb$Stot_mgS_l_PW)){
-    selb[!is.na(Stot_mgS_l_PW), FESPPWratio := (Fe_mg_l_nf_PW/55.845 - Stot_mgS_l_PW/32.06)/(Ptot_mgP_l_nf_PW/30.974)]
-    selb[!is.na(Stot_mgS_l_PW), FESPPWratio_FeS := (Fe_mg_l_nf_PW/55.845)/(Stot_mgS_l_PW/96.06)]
-    selb[!is.na(Stot_mgS_l_PW), FESPPWratio_FeP := (Fe_mg_l_nf_PW/55.845)/(Ptot_mgP_l_nf_PW/30.974)]
+    selb[!is.na(SO4_mg_l_nf_PW), FESPPWratio_FeS := (Fe_mg_l_nf_PW/55.845)/(SO4_mg_l_nf_PW/96.06)]
+    selb[, FESPPWratio_FeP := (Fe_mg_l_nf_PW/55.845)/(Ptot_mgP_l_nf_PW/30.974)]
   }
   if(!is.null(selb$Stot_mgS_l_nf_PW)){
     selb[!is.na(Stot_mgS_l_nf_PW),FESPPWratio := (Fe_mg_l_nf_PW/55.845 - Stot_mgS_l_nf_PW/32.065)/(Ptot_mgP_l_nf_PW/30.974)]
-    selb[!is.na(Stot_mgS_l_nf_PW),FESPPWratio_FeS := (Fe_mg_l_nf_PW/55.845)/(Stot_mgS_l_nf_PW/32.06)]
-    selb[!is.na(Stot_mgS_l_nf_PW),FESPPWratio_FeP := (Fe_mg_l_nf_PW/55.845)/(Ptot_mgP_l_nf_PW/30.974)]
+    selb[!is.na(Stot_mgS_l_nf_PW),FESPPWratio_FeS := (Fe_mg_l_nf_PW/55.845)/(Stot_mgS_l_nf_PW/32.065)]
+    selb[,FESPPWratio_FeP := (Fe_mg_l_nf_PW/55.845)/(Ptot_mgP_l_nf_PW/30.974)]
   }
-  
   
   # calculate nalevering
   selb[,nlvrFW := 0.0247 * Ptot_mgP_l_ng_SB - 1.6035]
+  
   if(!is.null(selb$Ptot_mgP_l_nf_PW)){
-    selb[,nlvrPW := 0.8095 * Ptot_mgP_l_nf_PW - 0.2905]  
+    selb[,nlvrPW := 0.8095 * selb$Ptot_mgP_l_nf_PW - 0.2905]  
   }
   
   if(nrow(selb)>0){
+    #Function for scaling y axis 2 decimals
+    scaleFUN <- function(x) sprintf("%.2f", x)
   
   if(!is.null(selb$FESPFWratio)){
     # filter only op samples where FESPFWratio, FESPDWratio and FESPPWratio are present
-    selb <- selb[!(is.na(FESPFWratio)),]
+  selb <- selb[!(is.na(FESPFWratio)),]
   #FW
   selb[,classFESPFWratio := cut(FESPFWratio, breaks = c((min(FESPFWratio)-1), 1.4, 4, max(FESPFWratio)), labels = c('geen ijzerval', 'beperkte ijzerval', 'functionele ijzerval'))]
   selb[FESPFWratio >= 4, nlvrFW := 0.1 * nlvrFW] # BaggerNut Tool zegt 0-1
   selb[FESPFWratio < 4 & FESPFWratio > 1.4, nlvrFW := 0.5 * nlvrFW] # BaggerNut zegt < nlvrFW & > 0-1
   selb[FESPFWratio <= 1.4, nlvrFW := nlvrFW]
   selb[nlvrFW < 0,nlvrFW := 0]
-
+  
   plotFW <- ggplot(selb, aes(x= EAGIDENT, y= nlvrFW, fill = classFESPFWratio))+
     geom_boxplot() +
+    scale_y_continuous(labels=scaleFUN)+
     theme_minimal()+
     theme(
       strip.background = element_blank(),
@@ -896,21 +906,21 @@ ppr_plotbod <- function(bod1, type='grid'){
       legend.key.size = unit(0.9, "lines"),
       legend.position = "right")+
     scale_fill_manual(values = c('red', 'salmon', 'lightblue'), labels = c('geen ijzerval', 'beperkte ijzerval', 'functionele ijzerval'), drop = FALSE)+
-    ggtitle( "Potentiele nalevering") +
+    ggtitle( "Potentiële nalevering") +
     labs(x="",y="P mg/m2/dag\n", fill = '')}
 
   if(!is.null(selb$FESPPWratio)){
     # filter only op samples where FESPFWratio, FESPDWratio and FESPPWratio are present
     selb <- selb[!(is.na(FESPPWratio)),]
-    # PW
-    selb[,classFESPPWratio := cut(FESPPWratio, breaks = c((min(FESPPWratio)-1), 1.4, 4, max(FESPPWratio)), labels = c('geen ijzerval', 'beperkte ijzerval', 'functionele ijzerval'))]
-    selb[FESPPWratio_FeP > 1 & FESPPWratio_FeS > 1, nlvrPW := 0.1*nlvrPW]  # BaggerNut zegt lage nalevering
-    selb[FESPPWratio_FeP > 1 & FESPPWratio_FeS <= 1, nlvrPW := 0.5*nlvrPW] # BaggerNut zegt < nlvrPW 
-    selb[FESPPWratio_FeP <= 1, nlvrPW := nlvrPW]
+    selb[FESPPWratio_FeP > 10 & FESPPWratio_FeS > 1, c('nlvrPW','classFESPPWratio') := list(0.1*nlvrPW,'functionele ijzerval') ]  # BaggerNut zegt lage nalevering
+    selb[FESPPWratio_FeP > 1 & FESPPWratio_FeS > 1, c('nlvrPW','classFESPPWratio') := list(0.5*nlvrPW,'beperkte ijzerval') ]  # BaggerNut zegt lage nalevering
+    selb[FESPPWratio_FeP > 1 & FESPPWratio_FeS <= 1, c('nlvrPW','classFESPPWratio') := list(0.7*nlvrPW,'beperkte ijzerval')] # BaggerNut zegt < nlvrPW 
+    selb[FESPPWratio_FeP <= 1, c('nlvrPW','classFESPPWratio') := list(nlvrPW,'geen ijzerval')]
     selb[nlvrPW < 0,nlvrPW := 0]
     
   qPW <- ggplot(selb, aes(x= EAGIDENT, y= nlvrPW, fill = classFESPPWratio))+
       geom_boxplot() +
+      scale_y_continuous(labels=scaleFUN)+
       theme_minimal()+
       theme(
         strip.background = element_blank(),
@@ -930,14 +940,43 @@ ppr_plotbod <- function(bod1, type='grid'){
       ggtitle( "Actuele nalevering uit de waterbodem obv poriewatermetingen") +
       labs(x="",y="P mg/m2/dag\n", fill = '')
   }
-
+  
+  if(!is.null(selb$Ptot_gP_kg_dg_SB)){  
+    selb <- selb[!(is.na(FESPDWratio)),]
+    selb[,classFESPDWratio := cut(FESPDWratio, breaks = c((min(FESPDWratio)-1), 1.4, 4, max(FESPDWratio)), labels = c('geen ijzerval', 'beperkte ijzerval', 'functionele ijzerval'))]
+    qBS <- ggplot(selb, aes(x= EAGIDENT, y= Ptot_gP_kg_dg_SB, fill = classFESPDWratio))+
+    geom_boxplot() +
+    scale_y_continuous(labels=scaleFUN)+
+    theme_minimal()+
+    theme(
+      strip.background = element_blank(),
+      title = element_text(size= 10),
+      axis.text.x = element_text(size= 10),
+      axis.text.y = element_text(size= 10),
+      axis.ticks =  element_line(colour = "black"),
+      axis.line = element_line(colour='black'),
+      panel.background = element_blank(),
+      plot.background = element_blank(),
+      axis.title=element_text(size=10) )+
+    theme(legend.title = element_text(size = 10, face = 'bold'),
+          legend.text  = element_text(size = 10),
+          legend.key.size = unit(0.9, "lines"),
+          legend.position = "right")+
+    scale_fill_manual(values = c('red', 'salmon', 'lightblue'), labels = c('FE/P < 1.4', 'FE/P < 4', 'FE/P >= 4'), drop = FALSE)+
+    ggtitle( "Voedselrijkdom waterbodem") +
+    labs(x="",y="P g/kg dg", fill = '')
+  }
+    
   # plot figure
   if(type=='plotFW'){out = plotFW}
   if(type=='plotqPW'){out = qPW}
-  if(type=='grid' & !is.null(selb$FESPPWratio) & !is.null(selb$FESPFWratio)){out = arrangeGrob(plotFW, qPW)}
+  if(type=='grid' & !is.null(selb$FESPPWratio) & !is.null(selb$FESPFWratio)){out = plot_grid(plotFW, qPW, ncol = 1, align = "v")}
+  if(type=='grid' & !is.null(selb$FESPPWratio) & !is.null(selb$FESPFWratio) & !is.null(selb$Ptot_gP_kg_dg_SB)){out = plot_grid(plotFW, qPW, qBS, ncol = 1, align = "v")}
   if(type=='grid' & is.null(selb$FESPPWratio) & !is.null(selb$FESPFWratio)){out = plotFW}
+  if(type=='grid' & is.null(selb$FESPPWratio) & !is.null(selb$FESPFWratio)& !is.null(selb$Ptot_gP_kg_dg_SB)){out = plot_grid(plotFW, qBS, ncol = 1, align = "v")}
   if(type=='grid' & !is.null(selb$FESPPWratio) & is.null(selb$FESPFWratio)){out = qPW}
-  
+  if(type=='grid' & !is.null(selb$FESPPWratio) & is.null(selb$FESPFWratio)& !is.null(selb$Ptot_gP_kg_dg_SB)){out = plot_grid(qPW, qBS, ncol = 1, align = "v")}
+  if(type=='grid' & is.null(selb$FESPPWratio) & is.null(selb$FESPFWratio) & !is.null(selb$Ptot_gP_kg_dg_SB)){out = qBS}  
   # return output
   return(out)
   }

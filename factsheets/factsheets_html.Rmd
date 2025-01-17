@@ -10,7 +10,7 @@ output:
 
 ---
 
-`r if(startsWith(out$waterlichamenwl$StatusFS, "WIP")){paste0('<div class="watermark">IN OPBOUW, CONCEPT</div>')}`
+`r if(startsWith(out$waterlichamenwl$StatusFS, "WIP")){paste0('<div class="watermark">CONCEPT</div>')}`
 
 # Factsheet toestand en ecologische sleutelfactoren (DIPS)
 
@@ -18,19 +18,13 @@ output:
 
 ### Beschrijving van het gebied en watersysteem op hoofdlijnen
 
-`r out$waterlichamenwl$Karakterschets` <br>
-`r out$waterlichamenwl$OWMNAAM_SGBP3`
-(`r out$waterlichamenwl$OWL_SGBP3`) heeft watertype
-"`r unique(out$waterlichamenwl$typebesch)`"
-(`r unique(out$eagwl$watertype)`) en het wateroppervlak van het
-waterlichaam is `r round(sum(out$eagwl$OppWater)/10000, 0)` hectare.
-<br> Het waterlichaam bestaat uit de deelgebieden: <br>
-`r out$deelgebieden$samen` <br> Het waterlichaam ligt in de provincie(s)
-`r out$waterlichamenwl$prov` en gemeente(n) `r out$waterlichamenwl$gem`.
+`r out$waterlichamenwl$Karakterschets` 
+`r out$waterlichamenwl$OWMNAAM_SGBP3` (`r out$waterlichamenwl$OWL_SGBP3`) heeft watertype
+"`r unique(out$waterlichamenwl$typebesch)`" (`r unique(out$eagwl$watertype)`) en het wateroppervlak is `r round(sum(out$eagwl$Opp_water)/10000, 1)` hectare.
+<br> 
+Het waterlichaam bestaat uit de deelgebieden `r out$deelgebieden$samen` en ligt in de provincie(s) `r out$waterlichamenwl$prov` en gemeente(n) `r out$waterlichamenwl$gem`. 
 `r if(!is.null(unique(out$waterlichamenwl$Gebiedpartners))){paste0("Andere gebiedspartners zijn ",unique(out$waterlichamenwl$Gebiedpartners),".")}`
-Het waterlichaam `r out$waterlichamenwl$OWMNAAM_SGBP3` heeft de status
-`r out$waterlichamenwl$Status` en is in eigendom van
-`r out$waterlichamenwl$Eigenaren`.
+`r out$waterlichamenwl$OWMNAAM_SGBP3` heeft de status `r out$waterlichamenwl$Status` en is in eigendom van `r out$waterlichamenwl$Eigenaren`.
 
 ## Ligging en beeld {data-height="400"}
 
@@ -77,8 +71,8 @@ De toestand in `r out$waterlichamenwl$OWMNAAM_SGBP3` (zwarte lijnen in de figuur
 
 **Ontwikkelingen in ecologische en chemische waterkwaliteit**
 <br>
-`r if(!is.na(out$waterlichamenwl$Trend)){paste0(out$waterlichamenwl$Trend, '<br>')}`
-`r if(!is.na(out$waterlichamenwl$TrendChemie)){paste0(out$waterlichamenwl$TrendChemie,'<br>')}`
+`r if(!is.na(out$waterlichamenwl$Trend)){paste0(out$waterlichamenwl$Trend, "<br>")}`
+`r if(!is.na(out$waterlichamenwl$TrendChemie)){paste0(out$waterlichamenwl$TrendChemie,"<br>")}`
 
 **Oorzaken op hoofdlijnen** 
 <br>
@@ -137,7 +131,7 @@ Datum: `r Sys.Date()` <br> Status: `r out$waterlichamenwl$StatusFS`
 
 ##  {data-height="150"}
 
-### SGBP 1 en 2 maatregelen die (deels) zijn uitgevoerd t.o.v. totaal
+### SGBP 1, 2 en 3 maatregelen die (deels) zijn uitgevoerd t.o.v. totaal
 
 ```{r, echo = FALSE}
 # show progress of measures done
@@ -147,7 +141,7 @@ flexdashboard::gauge(out$rates$rate_uit, min = 0, max = out$rates$rate_max, symb
 # in uitvoering toevoegen
 ```
 
-### SGBP 1 en 2 maatregelen in planvorming t.o.v. totaal
+### SGBP 1, 2 en 3 maatregelen in planvorming t.o.v. totaal
 
 ```{r, echo= FALSE}
 # show progress of measures planned
@@ -155,7 +149,7 @@ flexdashboard::gauge(out$rates$rate_plan, min = 0, max = out$rates$rate_max, sym
   success = c(80, 100), warning = c(40, 79), danger = c(0, 39)))
 ```
 
-### SGBP 1 en 2 maatregelen die zijn gefaseerd t.o.v. totaal
+### SGBP 1, 2 en 3 maatregelen die zijn gefaseerd t.o.v. totaal
 
 ```{r, echo=FALSE}
 # show progress of measures in phase
@@ -163,7 +157,7 @@ flexdashboard::gauge(out$rates$rate_fase, min = 0, max = out$rates$rate_max, sym
   success = c(80, 100), warning = c(40, 79), danger = c(0, 39)))
 ```
 
-### SGBP 1 en 2 maatregelen die zijn ingetrokken of vervangen t.o.v. totaal
+### SGBP 1, 2 en 3 maatregelen die zijn ingetrokken of vervangen t.o.v. totaal
 
 ```{r, echo=FALSE}
 # show progress of measures stopped or replaced
@@ -179,12 +173,11 @@ flexdashboard::gauge(out$rates$rate_nieuw, min = 0, max = out$rates$rate_max, sy
   success = c(80, 100), warning = c(40, 79), danger = c(0, 39)))
 ```
 
-## Maatregelen
 
+## Maatregelen
 ### 
 
 ```{r, echo = FALSE, message = FALSE, warning=FALSE, out.width= "100%", results='asis'}
-
 options(knitr.table.format = "markdown")
 options(kableExtra.auto_format = FALSE)
 
@@ -214,61 +207,72 @@ if(outputF == "html" & nrow(maatregelen2)>0){
 
 ```
 
+
 # Toelichting en onderbouwing ESF-en, monitoring en begrenzing
 
-## 
+##
 
 ### Motivering KRW status en herbegrenzing
-
 `r out$waterlichamenwl$motstat` 
 
 ### Monitoringswensen
-
 `r out$waterlichamenwl$MonitoringAnalyseWensen`
-
 
 ## Indicatoren ESF {data-height="500"}
 
 ### ESF 1: Productiviteit
 
-```{r chartP, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = 'Fosforbelasting per bron (bar) en kritische belasting.'}
+```{r chartP, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = 'Fosforbelasting per bron en kritische fosforbelasting.'}
 include_graphics(out$plotPwbal)
 ```
 
 
 ### ESF 2 en 4: Lichtklimaat en waterdiepte
 
-```{r licht2, echo= FALSE, warning = FALSE, message = FALSE, fig.cap= "Lichtklimaat in plassen obv extinctie of Waterdiepte in sloten."}
+```{r licht2, echo= FALSE, warning = FALSE, message = FALSE, fig.cap= "Lichtklimaat in plassen obv extinctie of Waterdiepte en doorzicht in sloten."}
 if(class(out$plotLichtklimaat)=='plotref'){include_graphics(out$plotLichtklimaat)}else{include_graphics(out$plotWaterdiepte)}
 
 ```
 
-
 ### ESF 1 en 3: Waterbodem
 
-```{r watbodem, echo= FALSE, warning = FALSE, message = FALSE, fig.cap = 'Nalevering en voedselrijkdom waterbodem.', echo = FALSE, message = FALSE, warning = FALSE}
+```{r watbodem, echo= FALSE, warning = FALSE, message = FALSE, fig.cap = 'Nalevering en voedselrijkdom waterbodem.'}
 include_graphics(out$plotWaterbodem)
 ```
 
 
-##  {data-height="12"}
+## {data-height="12"}
 
-### Brondata: Water- en stoffenbalansen (balans t/m `r out$pvskpversie`)
+### Brondata: Water- en stoffenbalansen (balans t/m `r out$pvskpversie`) 
+
+```{r watbaltable, echo=FALSE, message=FALSE, warning=FALSE, out.width="100%", results='asis'}
+
+pvskplegend_tab <- out$pvskp_legend
+
+options(knitr.table.format = "markdown")
+options(kableExtra.auto_format = FALSE)
+
+if(nrow(pvskplegend_tab)>0){
+  knitr::kable(pvskplegend_tab, format = "html", col.names = c("balansgebied","inlaat 1",
+                                                               "inlaat 2","inlaat 3","inlaat 4",
+                                                               "inlaat 5")) %>% 
+          kable_styling(full_width=TRUE) %>% 
+          column_spec(1, border_right = F)
+}
+ 
+
+
+```
 
 ### Brondata: Metingen fysisch-chemie (`r out$wqversie`) en hydrobiologie (`r out$hybiversie`)
 
 ### Brondata: Metingen waterbodemchemie (`r out$bodversie`)
 
+##  EKR scores op alle deelmaatlatten in de tijd 
 
+```{r ekrtijd, echo= FALSE, warning = FALSE, message = FALSE, out.width= "100%"}
 
-##  {data-height="800"}
-
-
-### EKR scores op alle deelmaatlatten in de tijd {data-height="700"}
-
-```{r ekrtijd, echo= FALSE, warning = FALSE, message = FALSE, echo = FALSE, message = FALSE, warning = FALSE}
-
-if(outputF == "html"){  
+if(outputF == "html" & !is.null(out$plotEKRlijn)){  
   plotly::ggplotly(out$plotEKRlijn)%>%
     plotly::layout(showlegend = T, legend = list(font = list(size = 9)))
 }
