@@ -300,7 +300,7 @@ saveRDS(trendfychem, file = './data/trendfychem.rds')
 # Dataset dashboard maken
 
 ```{r}
-dashboard_data <- createDashboarddata(ekrlijst, minjaar = 2006, trendjaar = 2017, outdir = './output')
+dashboard_data <- createDashboarddata(ekrlijst, minjaar = 2006, trendjaar = 2019, outdir = './output')
 # load all factshets from input dir
 inputdir <- './factsheets/output'
 FS <- list.files(path= paste0(inputdir), pattern=".html", full.names =  F)

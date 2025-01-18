@@ -348,7 +348,7 @@ beschrijvingtrend <- function(ekrtrendeag){
   return(ekr_scores_trendbesc)
 }
 # create data for dashboard schoon water AGV
-createDashboarddata <- function(ekrlijst, minjaar = 2006, trendjaar = 2017, outdir = outdir){
+createDashboarddata <- function(ekrlijst, minjaar = 2006, trendjaar = 2019, outdir = outdir){
   # make local copy (only within this function)
   db <- ekrlijst[ekrlijst$jaar >= minjaar, ]
   # select only top level metrics (hoofdmaatlatten)

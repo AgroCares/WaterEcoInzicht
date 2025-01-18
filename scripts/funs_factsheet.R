@@ -542,35 +542,41 @@ plotEKRlijnfs <- function(EKRset1, gebied = NULL){
   names(legend_colors) <- levels(bg$doelen)
   
   # prep colours and linetype
-  cols <- c("black","grey3","#252525","grey24","grey40","#636363","#969696","#CCCCCC")
-  cols <- as.data.table(cols)[,id := rep(1:8)]
-  cols[,linetype:= c("solid","dashed","dotted","dotdash","longdash","twodash","dashed","dotted")]
+  cols <- c("black","#969696","#252525","grey40","grey24","#636363","#CCCCCC")
+  cols <- as.data.table(cols)[,id := rep(1:7)]
+  cols[,linetype:= c("solid","dashed","dotted","dotdash","longdash","twodash","dashed")]
+  cols[, shape:= c('15','16','17','18','19','20','21')]
   setorder(z, level)
   z[level == 1, id := .GRP, by = c('GHPR')]
   z[level == 2, id := .GRP, by = c('GHPR')]
   z[level == 3, id := .GRP, by = c('GHPR')]
+  
   z <- merge(z, cols, by = 'id', all.x = TRUE)
-  cols <- unique(z[,c('GHPR','cols','linetype')])
+  cols <- unique(z[,c('GHPR','cols','linetype','shape')])
+  # cols[, shape := as.list(shape)] # nodig voor ggplot, maar werkt niet in plotly
   
   # prep order legend
   setorder(z, GHPR_level, jaar)
   ghpr_order <- unique(z$cols)
-  
-  ggplot(data= z, aes(x=jaar, y=Numeriekewaarde, col = GHPR, group = GHPR, linetype = linetype))+
+  # shape4override <- as.list(z[jaar == max(jaar) & waterlichaam == unique(waterlichaam)[1], shape])
+  # line4override <- z[jaar == max(jaar) & waterlichaam == unique(waterlichaam)[1], linetype]
+
+  p <- ggplot(data= z, aes(x=jaar, y=Numeriekewaarde, col = GHPR, group = GHPR, linetype = linetype, shape = shape))+
     stat_summary(fun = "mean", geom = "point") +
     stat_summary(fun = "mean", geom = "line") +
-    scale_colour_manual(values = cols$cols, breaks = cols$GHPR)+
+    scale_colour_manual(values = cols$cols, breaks = as.vector(cols$GHPR))+
+    scale_shape_manual(values = cols$shape)+
     scale_linetype_manual(values = c('solid'='solid','dashed'='dashed', "dotted"="dotted","longdash"="longdash",'dotdash'='dotdash',"twodash"="twodash",'dashed'='dashed', "dotted"="dotted"), breaks = ghpr_order)+
     scale_x_continuous(expand = c(0, 0), limits= c(min(z$jaar)-2, max(z$jaar)+2), n.breaks = 8, labels = scales::number_format(accuracy = 1, big.mark = ''))+
     scale_y_continuous(expand = c(0, 0), limits = c(0, max_y_axis), breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1)) +
     
     geom_rect(data= bg, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = doelen), 
-              inherit.aes = FALSE, alpha = 0.15) +
-    scale_fill_manual('Doel waterkwaliteit:', values = legend_colors, labels = c("goed", "matig","ontoereikend","slecht"), guide = guide_legend(override.aes = list(alpha = 0.15)))+
+              inherit.aes = FALSE, alpha = 0.15, ) +
+    scale_fill_manual(values = legend_colors, labels = c("goed", "matig","ontoereikend","slecht"))+
     
     facet_grid(vars(maatlatniv),vars(wlmt))+
     ylab('')+xlab('')+
-    guides(col=guide_legend(title="(Deel)maatlat: "))+
+    guides(shape = "none", linetype = "none", fill = 'none',col=guide_legend(title="(Deel)maatlat: ", ncol = 1))+
     theme_minimal()+
     theme(axis.ticks.x=element_blank(),
           axis.line = element_line(colour = "black"),
@@ -592,6 +598,8 @@ plotEKRlijnfs <- function(EKRset1, gebied = NULL){
           legend.text  = element_text(size = 10),
           legend.key.size = unit(0.9, "lines"),
           legend.position = "right")
+
+return(p)
 }
 
 # maak plot van p VS Kp

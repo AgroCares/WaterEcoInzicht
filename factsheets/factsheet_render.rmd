@@ -110,7 +110,7 @@ brondata <- list(ESFoordelen = ESFoordelen,
 # run for all files
 # NB. delete eerst alle plots in plotviewer
 
-for(eagnr in c(1:nrow
+for(eagnr in c(8:nrow
                (brondata$ESFoordelen))){
 
   # voor debug attach(brondata) detach(brondata)
