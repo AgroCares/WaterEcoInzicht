@@ -336,6 +336,7 @@ if("OEVPTN" %in% unique(krw$Somparameter.code)){
   # create plt met ekr scores en doelen
   # loopje voor alle figuren als EKRset1 = EKRset 
   # NL11 is ongewogen
+ekr_scores1 <- ekr_scores[aggregated == 'ja', ]
   for(i in unique(ekr_scores1$id)){
   mapEKR <- ppr_ekrplot2(ekr_scores1[ekr_scores1$id == i,])
   ggplot2::ggsave(mapEKR,file=paste0('factsheets/output/',i,'mapEKR.png'),
@@ -398,8 +399,13 @@ write.table(planten, file = 'best_sites.csv', sep = ';', dec = '.')
 ```{r waterkwaliteit, include=FALSE, eval = FALSE}
 # Summer mean wq on locations were measures were measures are executed
 # wq.sel$season == "summer" 
+wq[,jaar:= year(datum)]
+wq[,maand:= month(datum)]
+wq[,season := fifelse(maand %in% 4:10,'summer','winter')]
 
-plot <- ggplot(data = wq[parameterid == "CHLFa_ug_l_spectro" & locatie %in% c( 'BOT001','BOT002'),], aes(x=jaar, y=meetwaarde, col= locatie, fill = locatie, group = jaar))+
+plot <- 
+  ggplot(data = wq[parameterid == "Ptot_mgP_l" & locatie %in% c( 'SAP010'),], 
+         aes(x=jaar, y=meetwaarde, col= locatie, fill = locatie, group = jaar))+
     geom_point(stat = "summary", fun = "mean")+
     geom_line(stat = "summary", fun = "mean")+   
     #facet_wrap(.~fewsparameter)+
@@ -408,15 +414,42 @@ plot <- ggplot(data = wq[parameterid == "CHLFa_ug_l_spectro" & locatie %in% c( '
     theme (axis.text.x =element_text(angle=90, vjust=1))
 ggplotly(p=plot)
 
+#  "pH" "SO4_mg_l_nf" "ZS_mg_l" "SO4_mg_l" 
+# "CHLFa_ug_l_spectro" "Ca_mg_l" "E__m_L380nm" "Cl_mg_l"
+#""Ntot_mgN_l"  NH4_mgN_l_nf" "Ptot_mgP_l" "NKj_mgN_l" "NO3_mgN_l_nf" 
+# "MGETAL_mgHCO3_l"
 
 wq <- fychem
-plot <- ggplot(data= wq[parameterid == "Ptot_mgP_l" & locatie %in% c( 'PKH020') & jaar >2015,], aes(x=datum, y=meetwaarde, col= locatie, fill = locatie))+
+wq[parameterid == 'SO4_mg_l_nf', parameterid := 'SO4_mg_l']
+wq[parameterid == 'Ca_mg_l_nf', parameterid := 'Ca_mg_l']
+wq[parameterid == 'Cl_mg_l_nf', parameterid := 'Cl_mg_l']
+wq[parameterid == 'MGETAL_mgHCO3_l_nf', parameterid := 'MGETAL_mgHCO3_l']
+
+# wq1 <- wq[ locatie %in% c( 'OBT006', 'PMW057','PMW072') & jaar > 2010,]
+# wq1 <- wq[ EAGIDENT %in% c('3302-EAG-1','3302-EAG-1'),] 
+
+plot <- 
+  ggplot(data= wq[parameterid == "ZS_mg_l"   & EAGIDENT %in% c('3302-EAG-1','3302-EAG-1') & jaar > 2015,],
+         aes(x=datum, y=meetwaarde, col= locatie, fill = locatie))+
     geom_point()+
     geom_line()+
+  # ylim(0,20)+
     #facet_wrap(.~fewsparameter)+
-    theme_minimal()+
-    ggtitle('')+ ylab("")+ xlab('datum')+
-    theme (axis.text.x =element_text(angle=90, vjust=1))
+  scale_x_date(date_breaks = "year", date_labels = "%Y")+
+  theme_minimal()+
+  theme(
+    strip.background = element_blank(),
+    axis.title = element_text(size= 14), 
+    axis.text = element_text(size= 14, angle = 45),
+    legend.title = element_text(size= 15),
+    legend.text = element_text(size= 14),
+    axis.ticks =  element_line(colour = "black"),
+    plot.title = element_text(size =15, face="bold", hjust = 0.5),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+  )+
+  ggtitle('Oostelijke binnenpolder van Tienhoven en Taartpunt') +
+  labs(x= "datum",y= "Concentratie in mg/l" )
 ggplotly(p=plot)
 
 # kaart met alle location en EAG

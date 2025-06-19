@@ -17,13 +17,16 @@ import_wqdata <- function(path = paste0('./input/', snapshot, '/fychem/'), locat
   fychem <- fychem[,grep('locatie ', colnames(fychem)):= NULL]
   fychem <- fychem[,grep('WNA ', colnames(fychem)):= NULL]
   if('locatiecode' %in% colnames(fychem)){fychem[,locatie := locatiecode]}
-  fychem <- merge(fychem, location, by.x = 'locatie', by.y = 'CODE', all.x = TRUE)
+  fychem <- merge(fychem, location, by.x = 'locatie', by.y = 'CODE', all.x = TRUE, suffixes = c('','_loc'))
   if('fewsparameter' %in% colnames(fychem)){fychem[,parameterid := fewsparameter]}
   if('analysecode' %in% colnames(fychem)){fychem[,analyse := analysecode]}
-  fychem[,c('parameter','parametercode','grootheid','parameterfractie','eenheid','eenheidreferentie','eenheidequivalent'):=NULL]
+  if('parametercode' %in% colnames(fychem)){fychem[,parameter := parametercode]}
   # couple data 2 additional parameterinfo
   # replace or add parameter, grootheid, typering, eenheid with domainvalues
-  fychem <- merge(fychem, parameter[,c("code","naam", 'parameter','grootheid','parameterfractie','eenheid','eenheidreferentie','eenheidequivalent',"categorie","H_min", "H_max")], by.x = 'parameterid', by.y = 'code')
+  fychem <- merge(fychem, parameter[,c("code","naam", 'parameter','grootheid','parameterfractie','eenheid','eenheidreferentie','eenheidequivalent',"categorie","H_min", "H_max")], by.x = 'parameterid', by.y = 'code', suffixes = c('','_parameter'))
+  fychem[, grootheid:= grootheid_parameter]
+  fychem[,c('parameter_parameter','grootheid_parameter','parameterfractie_parameter','eenheid_parameter','eenheidreferentie_parameter','eenheidequivalent_parameter'):=NULL]
+  
   setnames(fychem, c("naam"),c("parameterid_naam"))
   
   return(fychem)
@@ -274,19 +277,20 @@ ppr_maatregelen <- function(dir = 'data'){
 }
 
 # importeer waterbalansen-------------
+# importeer waterbalansen-------------
 # functie om algemene gegevens van de excelsheet te laden 
 loadAlgemeen <- function(x,wdir){
   
   # file name including location
   fname <- paste0(wdir,x)
-  # fname <- paste0(wdir,files[67])
+  # fname <- paste0(wdir,files[165])
   
   # print progress
   print(paste0('algemene data van ',basename(fname),' worden ingelezen'))
   
   # read the tab uitangspunten
   tabbladen <-    excel_sheets(fname)
-  n2 <- tabbladen[grepl("uitg", tolower(tabbladen))]
+  n2 <- tabbladen[grepl("uitgangspunten", tolower(tabbladen))]
   if(length(n2)<=0){n2 <- tabbladen[grepl("data-invoer", tolower(tabbladen))]}
   alg = suppressMessages(readxl::read_xlsx(fname, sheet = n2, col_names = F, skip = 2)[1:34,1:9])
   
@@ -312,7 +316,7 @@ loadAlgemeen <- function(x,wdir){
   # return output
   return(out)
 }
-loadBalance2 <- function(x,wdir){
+loadBalance <- function(x,wdir){
   
   # file name including location
   fname <- paste0(wdir,x)
@@ -321,11 +325,7 @@ loadBalance2 <- function(x,wdir){
   print(paste0('water and P fluxes from ',basename(fname),' worden ingelezen'))
   
   # read excel water balance, different for xls and xlsx
-  if(grepl(pattern = '.xls$', fname)){
-    balans  = readxl::read_xls(fname, sheet = 'Q+P_mnd', col_names = F, na = '#N/A', skip = 13 )
-  } else {
-    balans = suppressMessages(readxl::read_xlsx(fname, sheet = 'Q+P_mnd',col_names = F, na = '#N/A')[-c(1:13),] )
-  }
+  balans = suppressMessages(readxl::read_xlsx(fname, sheet = 'Q+P_mnd',col_names = F, na = '#N/A')[-c(1:13),] )
   
   # convert to data.table and give names (p1 to p..n)
   balans <- as.data.table(balans)
@@ -337,10 +337,10 @@ loadBalance2 <- function(x,wdir){
   balans[,jaar := year(date)]
   balans[,seiz := ifelse(maand %in% 4:9,'zomer','winter')]
   
-  # peil [m NAP], volume [m3], debiet[mm/dag], berging [m3/dag] en sluitfout [m3/dag]
-  cols <- paste0('p',c(2:4,28:30))
+  # peil [m NAP], volume [m3], debiet[mm/dag], reparatie [m3/dag] , berging [m3/dag], sluitfout [m3/dag] en maalstaat [m3/dag]
+  cols <- paste0('p',c(2:4,27:30))
   balans[,(cols) := lapply(.SD,as.numeric),.SDcols = cols]
-  setnames(balans,cols,paste0('w_',c('peil','volume','debiet','berging','sluitfout','maalstaat')))
+  setnames(balans,cols,paste0('w_',c('peil','volume','debiet','reparatie','berging','sluitfout','maalstaat')))
   
   # IN waterposten [m3/dag]
   cols <- paste0('p',6:17)
@@ -376,8 +376,8 @@ loadBalance2 <- function(x,wdir){
   # add poldernaam
   balans[,pol := basename(fname)]
   
-  # filter data given availability of precipitation (per month)
-  out <- balans[w_i_neerslag >0]
+  # filter data given availability of precipitation (per month), since this is an aggregated value there are no NA's 
+  out <- balans[w_i_neerslag > 0 ]
   
   # rest column order with polder name and time first
   setcolorder(out,c('pol','date','jaar','maand','seiz'))
@@ -386,7 +386,7 @@ loadBalance2 <- function(x,wdir){
   return(out)
 }
 # wrapper function 
-loadBalances_lm <- function(dir_bal, init, sfile = TRUE){
+loadBalances <- function(dir_bal, sfile = TRUE){
   
   # select file names in the directory where waterbalansen are stored
   files <- list.files(dir_bal)
@@ -399,7 +399,7 @@ loadBalances_lm <- function(dir_bal, init, sfile = TRUE){
   alg <- rbindlist(alg)
   
   # read excel data from sheet 'jaargemiddelden'
-  bal <- lapply(files,function(x) loadBalance2(x,wdir = dir_bal))
+  bal <- lapply(files,function(x) loadBalance(x,wdir = dir_bal))
   bal <- rbindlist(bal)
   
   #koppel uitgangspunten en q+p_mnd
@@ -416,9 +416,6 @@ loadBalances_lm <- function(dir_bal, init, sfile = TRUE){
   # add wp_min_sum and wp_inc_sum
   dat[,wp_min_sum := rowSums(.SD,na.rm=T),.SDcols = grep("wp_min_",names(dat))]
   dat[,wp_inc_sum := rowSums(.SD,na.rm=T),.SDcols = grep("wp_inc_",names(dat))]
-  
-  # save file
-  if(sfile){saveRDS(dat, file = paste0('./data/dat','.rds'))}
   
   # return data.table
   return(dat)

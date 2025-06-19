@@ -118,12 +118,19 @@ knitr::kable(pESFtab, format = "html", col.names = NULL) %>%
 
 ## Bron
 
+### {data-width="100"}
+`r include_graphics('images/nmilogo.png')`
+
+### Auteur {data-width="210"}
+Deze factsheet is gemaakt door L. Moria van het Nutriënten Management Instituut (NMI). 
+
+
 ### Bron {data-width="800"}
 
-Deze factsheet is gebaseerd op de KRW-toetsing (aan maatlatten 2018) uit `r out$toetsjaar`, begrenzing waterlichamen 2022-2027, hydrobiologische data `r out$hybitotaalversie`, conceptmaatregelen en doelen voor SGBP3 `r if(!is.na(out$waterlichamenwl$Literatuurverwijzing)|!out$waterlichamenwl$Literatuurverwijzing == ''){paste0(" en ",out$waterlichamenwl$Literatuurverwijzing)}`.
+Deze factsheet is gebaseerd op: KRW-toetsing (aan maatlatten 2018) uit `r out$toetsjaar`, begrenzing waterlichamen 2022-2027, hydrobiologische data `r out$hybitotaalversie`, KRW-maatregelen en doelen SGBP3 `r if(!is.na(out$waterlichamenwl$Literatuurverwijzing)|!out$waterlichamenwl$Literatuurverwijzing == ''){paste0(" en ",out$waterlichamenwl$Literatuurverwijzing)}`.
 Het beeld (tekening) van de toestand van het waterlichaam is gemaakt door Annemoon van Steen.
 
-### Status {data-width="200"}
+### Status {data-width="180"}
 
 Datum: `r Sys.Date()` <br> Status: `r out$waterlichamenwl$StatusFS`
 
@@ -212,8 +219,8 @@ if(outputF == "html" & nrow(maatregelen2)>0){
 
 ##
 
-### Motivering KRW status en herbegrenzing
-`r out$waterlichamenwl$motstat` 
+### Status, actualisatie en opmerkingen 
+`r out$waterlichamenwl$Opmerking` 
 
 ### Monitoringswensen
 `r out$waterlichamenwl$MonitoringAnalyseWensen`
@@ -229,7 +236,7 @@ include_graphics(out$plotPwbal)
 
 ### ESF 2 en 4: Lichtklimaat en waterdiepte
 
-```{r licht2, echo= FALSE, warning = FALSE, message = FALSE, fig.cap= "Lichtklimaat in plassen obv extinctie of Waterdiepte en doorzicht in sloten."}
+```{r licht2, echo= FALSE, warning = FALSE, message = FALSE, fig.cap= "Lichtklimaat in plassen obv verticale extinctie of Waterdiepte en doorzicht in sloten."}
 if(class(out$plotLichtklimaat)=='plotref'){include_graphics(out$plotLichtklimaat)}else{include_graphics(out$plotWaterdiepte)}
 
 ```
@@ -266,6 +273,8 @@ if(nrow(pvskplegend_tab)>0){
 
 
 ### Brondata: Metingen fysisch-chemie (`r out$wqversie`) en hydrobiologie (`r out$hybiversie`)
+
+De verticale extinctie is een maat voor de uitdoving van neerwaarts gericht licht in het water. Licht verzwakt onder water doordat het wordt geabsorbeerd en gereflecteerd door deeltjes (algen, humus, zwevend-stof) en water zelf. Hoe hoger de extinctie, hoe minder licht er op de waterbodem valt (een hoge extinctie staat lager op de y-as dan een lage). In de figuur met verticale extinctie staan referentielijnen met extincties waarbij op verschillende diepten nog voldoende (4%) licht op de bodem valt voor plantengroei. Als de extinctie lager is (hoger in de grafiek) dan deze lijnen valt er voldoende licht voor plantengroei op deze diepte. In sloten wordt geen verticale extinctie gemeten. Hier laat de grafiek de waterdiepte en het doorzicht zien. Als doorzicht/waterdiepte groter is dan 0.6 gaat dan valt er voldoende licht op de waterbodem voor plantengroei.
 
 ### Brondata: Metingen waterbodemchemie (`r out$bodversie`)
 

@@ -3,7 +3,10 @@
 
 # Load packages and functions-------------------------------------
 library(data.table)
-library(plotly)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+# library(plotly)
 source('./scripts/visualisations_wqdata.R')
 
 # Load data ------------------------------------------------------

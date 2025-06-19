@@ -84,6 +84,9 @@ EST <- readRDS('./data/estloc.rds')
 # koppeltabel om de juiste tekening te kunnen koppelen
 EST_kt <- data.table::fread('./input/EST_koppeltabel.csv', encoding = "Latin-1")
 EST_kt[,estnaam := lapply(estnaam, function(x) gsub("^\\s+|\\s+$", "", x))]
+# validate koppeltabel tbv factsheets (are all possible EST's present in koppeltabel 2 pictures)
+checkkt <- EST[!estnaam %in% unique(EST_kt$estnaam),]
+unique(checkkt$estnaam)
 
 # watertypen beschrijving
 watertypen <- data.table::fread('./input/KRWWatertype.csv')
@@ -110,11 +113,11 @@ brondata <- list(ESFoordelen = ESFoordelen,
 # run for all files
 # NB. delete eerst alle plots in plotviewer
 
-for(eagnr in c(8:nrow
+for(eagnr in c(1:nrow
                (brondata$ESFoordelen))){
 
   # voor debug attach(brondata) detach(brondata)
-  # eagnr <- 176 heeft geen doel
+  # eagnr <- 23 heeft geen doel
   
   # collect the data for that specific water body / EAG / GAF
   out = factsheetExtract(i=eagnr, brondata = brondata, splot = TRUE)

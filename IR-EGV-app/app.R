@@ -14,7 +14,7 @@ library(leaflet)
 library(plotly)
 library(shinythemes)
 library(ggplot2)
-library(rgdal)
+# library(rgdal)
 library(data.table)
 
 # other settings
@@ -112,3 +112,4 @@ server <- function(input, output, session) {
            }
 
 shiny::shinyApp(ui = ui, server = server)
+

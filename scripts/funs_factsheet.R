@@ -4,7 +4,7 @@
 # extractfunctie for extracting relevant properties and data needed for single factsheet ----
 factsheetExtract <- function(i,brondata,splot = TRUE){ 
   with(brondata, {
-  # i <- 22
+  # i <- 23
   # subset data ----
   # subset ESFoordelen and get ESF
   waterlichamenwl <- ESFoordelen[i,]
@@ -402,6 +402,8 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
                     width = 20, height = 15,units='cm',dpi=1000)
   }
   
+  
+  
   # make a list to store the output
   out <- list(waterlichamenwl = waterlichamenwl,
               wlname = wlname,
@@ -475,8 +477,8 @@ ppr_ekrplot <- function(ekr_scores1){
   plot <- 
     ggplot(dt, aes(x = wmlt, y = EKR3jr)) +
     geom_rect(data = bg, inherit.aes = FALSE, aes(xmin = 0, xmax = 1, ymin = ymin, ymax = ymax,
-                  fill = doelen), alpha = 0.15) +
-    scale_fill_manual('Doel waterkwaliteit:', values = legend_colors, labels = c("goed", "matig","ontoereikend","slecht"), guide = guide_legend(override.aes = list(alpha = 0.15)))+
+                  fill = doelen), alpha = 0.3) +
+    scale_fill_manual('Doel waterkwaliteit:', values = legend_colors, labels = c("goed", "matig","ontoereikend","slecht"), guide = guide_legend(override.aes = list(alpha = 0.3)))+
     geom_segment(aes(x = 0, xend = 1,y = EKR3jr, yend = EKR3jr, linetype = "Actuele toestand"),col = "black", cex = 1.4) + # linetype = 2 -> dashed
     scale_y_continuous(expand = c(0, 0), limits = c(0, max_y_axis), breaks=c(0, 0.2, 0.4, 0.6, 0.8, 1)) +
     scale_linetype_manual("", values= c("Actuele toestand" = 1))+
@@ -817,15 +819,22 @@ ppr_extinctie <- function(wq1, hybi1, filter = c('EXTTCEFCELBT__m_L400-700nm', '
   wq1 <- wq1[parameterid %in% filter & jaar > 2015 & meetwaarde > 0,]
   wq1 <- wq1[!is.na(watertype) & !is.na(EAGIDENT) & EAGIDENT != '',]
   meanext <- mean(wq1[parameterid %in% 'EXTTCEFCELBT__m_L400-700nm', meetwaarde])
-
+  wq1[jaar<2019&jaar>2015,jaar_int:='2016 t/m 2018']
+  wq1[jaar<2022&jaar>2018,jaar_int:='2019 t/m 2021']
+  wq1[jaar<2025&jaar>2021,jaar_int:='2022 t/m 2024']
+  
   # plot figure
   p <- ggplot()+
-    geom_boxplot(data = wq1[parameterid %in% 'EXTTCEFCELBT__m_L400-700nm',], aes(x= EAGIDENT, y= meetwaarde)) +
-    geom_hline(aes(yintercept = log(25)/0.5, col = '0.5 meter'), show.legend = T)+
-    geom_hline(aes(yintercept = log(25), col = '1 meter'), show.legend = T)+ #vec voor 1 meter >4%
-    geom_hline(aes(yintercept = log(25)/maxwd, col = paste0(as.character(maxwd), ' meter (max diepte bemonsterd)')), show.legend = T)+ #vec voor 4 meter >4%
-    geom_hline(aes(yintercept = log(25)/medianewd, col = paste0(as.character(medianewd), ' meter (mediane diepte)')), show.legend = T)+ #vec voor 4 meter >4%
-    geom_hline(aes(yintercept = log(25)/7, col = '7 meter'), show.legend = T)+ #vec+ voor 7 meter 4%
+    geom_boxplot(data = wq1[parameterid %in% 'EXTTCEFCELBT__m_L400-700nm',], aes(x= jaar_int, y= meetwaarde), outliers = FALSE) +
+    geom_hline(aes(yintercept = (log(25)/0.5), col = '0.5 meter'), show.legend = T)+
+    geom_rect(inherit.aes = FALSE, aes(xmin = 0, xmax = Inf, ymin = Inf, ymax = log(25)/0.5),fill=  'grey2', alpha = 0.3) +
+    geom_hline(aes(yintercept = (log(25)), col = '1 meter'), show.legend = T)+ #vec voor 1 meter >4%
+    geom_hline(aes(yintercept = (log(25))/maxwd, col = paste0(as.character(maxwd), ' meter (max diepte bemonsterd)')), show.legend = T)+ #vec voor 4 meter >4%
+    geom_hline(aes(yintercept = (log(25))/medianewd, col = paste0(as.character(medianewd), ' meter (mediane diepte)/n Op ')), show.legend = T)+ #vec voor 4 meter >4%
+    geom_rect(inherit.aes = FALSE, aes(xmin = 0, xmax = Inf, ymin = log(25)/0.5, ymax = log(25)/medianewd),fill=  'darkgrey', alpha = 0.3) +
+    geom_hline(aes(yintercept = (log(25))/7, col = '7 meter'), show.legend = T)+ #vec+ voor 7 meter 4%
+    scale_y_reverse()+
+    facet_grid(.~EAGIDENT)+
     guides(col=guide_legend(title="4 % licht voor waterplanten op"))+
     theme_minimal()+
     theme(
@@ -842,7 +851,7 @@ ppr_extinctie <- function(wq1, hybi1, filter = c('EXTTCEFCELBT__m_L400-700nm', '
       legend.key.size = unit(0.9, "lines"),
       legend.position = "right")+
     ggtitle('') +
-    labs(x= 'Ecologisch analysegebied', y = 'Verticale extinctie')
+    labs(x= 'Ecologisch analysegebied', y = 'Verticale extinctie (/m)')
   # return plot
   return(p)
 
@@ -930,7 +939,7 @@ ppr_plotbod <- function(bod1, type='grid'){
     scaleFUN <- function(x) sprintf("%.2f", x)
   
   if(!is.null(selb$FESPFWratio)){
-    # filter only op samples where FESPFWratio, FESPDWratio and FESPPWratio are present
+  # filter only op samples where FESPFWratio, FESPDWratio and FESPPWratio are present
   selb <- selb[!(is.na(FESPFWratio)),]
   #FW
   selb[,classFESPFWratio := cut(FESPFWratio, breaks = c((min(FESPFWratio)-1), 1.4, 4, max(FESPFWratio)), labels = c('geen ijzerval', 'beperkte ijzerval', 'functionele ijzerval'))]
@@ -964,9 +973,9 @@ ppr_plotbod <- function(bod1, type='grid'){
   if(!is.null(selb$FESPPWratio)){
     # filter only op samples where FESPFWratio, FESPDWratio and FESPPWratio are present
     selb <- selb[!(is.na(FESPPWratio)),]
-    selb[FESPPWratio_FeP > 10 & FESPPWratio_FeS > 1, c('nlvrPW','classFESPPWratio') := list(0.1*nlvrPW,'functionele ijzerval') ]  # BaggerNut zegt lage nalevering
-    selb[FESPPWratio_FeP > 1 & FESPPWratio_FeS > 1, c('nlvrPW','classFESPPWratio') := list(0.5*nlvrPW,'beperkte ijzerval') ]  # BaggerNut zegt lage nalevering
-    selb[FESPPWratio_FeP > 1 & FESPPWratio_FeS <= 1, c('nlvrPW','classFESPPWratio') := list(0.7*nlvrPW,'beperkte ijzerval')] # BaggerNut zegt < nlvrPW 
+    selb[FESPPWratio_FeP > 10 & FESPPWratio_FeS > 1, c('nlvrPW','classFESPPWratio') := list(0.1*nlvrPW,'functionele ijzerval') ]  # dit is ook onder zuurstofloze omstandigheden gunstiger # BaggerNut zegt lage nalevering
+    selb[FESPPWratio_FeP > 1 & FESPPWratio_FeS > 1, c('nlvrPW','classFESPPWratio') := list(0.5*nlvrPW,'functionele ijzerval') ]  # BaggerNut zegt lage nalevering
+    selb[FESPPWratio_FeP > 1 & FESPPWratio_FeS <= 1, c('nlvrPW','classFESPPWratio') := list(0.5*nlvrPW,'beperkte ijzerval')] # BaggerNut zegt < nlvrPW 
     selb[FESPPWratio_FeP <= 1, c('nlvrPW','classFESPPWratio') := list(nlvrPW,'geen ijzerval')]
     selb[nlvrPW < 0,nlvrPW := 0]
     

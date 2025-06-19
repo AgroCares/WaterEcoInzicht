@@ -13,7 +13,9 @@ ppr_wqdata <- function(fychem, syear = 1980, srow = c("IONEN","NUTRI","ALG","VEL
   db <- db[afronding == 'Ja',]
   
   # adapt wq database
+  db[,datum := as.Date(datum, format = "%Y-%m-%d %H:%M")]
   db[,jaar := year(datum)]
+  db[,maand := month(datum)]
   db[limietsymbool == '<',meetwaarde := meetwaarde * 0.5]
   
   # delete years before 2000
@@ -468,3 +470,41 @@ trend_fychem <- function(fychem_vast, filter = "Ntot", grens1 =0.25, grens2 =0.1
   return(dt.trend)
 }
 
+# calc nalevering bodchemie
+calc_watbod <- function(bodchem){
+  
+  # dcast slootbodem
+  selb <- dcast.data.table(bodchem, EAGIDENT+locatie+datum+jaar ~ parameterid+compartiment, value.var = "meetwaarde", fun.aggregate = mean, fill= "")
+
+  # calculate relevant ratios
+  selb[,FeSP_DW := (Fe_mg_kg_dg_SB/55.845 - Stot_mgS_kg_dg_SB/32.065)/(Ptot_gP_kg_dg_SB*1000/30.974)]# deze zit in baggernut
+  selb[,FeP_DW := (Fe_mg_kg_dg_SB/55.845)/(Ptot_gP_kg_dg_SB*1000/30.974)]
+  selb[,FeS_DW := (Fe_mg_kg_dg_SB/55.845)/(Stot_mgS_kg_dg_SB/32.065)] # deze is meest relevant
+  selb[,FeSP_FW := (Fe_mg_l_ng_SB/55.845 - Stot_mgS_l_ng_SB/32.065)/(Ptot_mgP_l_ng_SB/30.974)]# deze zit in baggernut
+  selb[,FeP_FW := (Fe_mg_l_ng_SB/55.845)/(Ptot_mgP_l_ng_SB/30.974)]
+  selb[,FeS_FW := (Fe_mg_l_ng_SB/55.845)/(Stot_mgS_l_ng_SB/32.065)]
+  selb[,FeP_PW := (Fe_mg_l_nf_PW/55.845)/(Ptot_mgP_l_nf_PW/30.974)]# deze zit in baggernut & is meest relevant
+  selb[,FeS_PW := (Fe_mg_l_nf_PW/55.845)/(SO4_mg_l_nf_PW/96.06)]
+  selb[,FeS_PW := (Fe_mg_l_nf_PW/55.845)/(Stot_mgS_l_nf_PW/96.06)]
+  
+  # calculate nalevering
+  selb[,nlvr_FW := 0.0247 * Ptot_mgP_l_ng_SB - 1.6035]
+  selb[,nlvr_PW := 0.8095 * Ptot_mgP_l_nf_PW - 0.2905]
+  selb[,nlvr_olson_FW := 5.8 * (Ptot_mgPOlsen_l_ng_BS/30.974) - 1.1361]
+ 
+  #FW
+  selb[,classFeSP_FW := cut(FeSP_FW, breaks = c((min(FeSP_FW, na.rm = TRUE)-1), 1.4, 4, max(FeSP_FW, na.rm = TRUE)), labels = c('geen ijzerval', 'beperkte ijzerval', 'functionele ijzerval'))]
+  selb[FeSP_FW >= 4, nlvr_FW := 0.1 * nlvr_FW] # BaggerNut Tool zegt 0-1
+  selb[FeSP_FW < 4 & FeSP_FW > 1.4, nlvr_FW := 0.5 * nlvr_FW] # BaggerNut zegt < nlvr_FW & > 0-1
+  selb[FeSP_FW <= 1.4, nlvr_FW := nlvr_FW]
+  selb[nlvr_FW < 0,nlvr_FW := 0]
+  #PW
+  selb[FeP_PW > 10 & FeS_PW > 1, c('nlvr_PW','classFESPPWratio') := list(0.1*nlvr_PW,'functionele ijzerval') ]  # BaggerNut zegt lage nalevering
+  selb[FeP_PW > 1 & FeS_PW > 1, c('nlvr_PW','classFESPPWratio') := list(0.1*nlvr_PW,'functionele ijzerval') ]  # BaggerNut zegt lage nalevering
+  selb[FeP_PW > 1 & FeS_PW <= 1, c('nlvr_PW','classFESPPWratio') := list(0.5*nlvr_PW,'beperkte ijzerval')] # BaggerNut zegt < nlvrPW 
+  selb[FeP_PW <= 1, c('nlvr_PW','classFESPPWratio') := list(nlvr_PW,'geen ijzerval')]
+  selb[nlvr_PW < 0,nlvr_PW := 0]
+
+  return(selb)  
+
+}

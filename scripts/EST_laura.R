@@ -7,24 +7,28 @@
 
 
 monstextract <- function(i, macft, soortenlijst_submers, soortenlijst_kroos, soortenlijst_oever, grenswaarden_EST){
+  #w1, w3 5, 7, 8komen niet voor
+  #n soort submers, woeker doet het niet
+  #doorzicht diepte klopt niet
+  
   # monsters zijn slechts 1 compartiment en komen samen op loc niveau, dus niet te veel filteren op dit niveau, later wordt er geaggregeerd naar loc
   # i <- unique(macft$monsterident)[1]
   sel <- unique(macft[macft$monsterident == i,])
   # parameters water---------  
-  doorz_diep <- ifelse(length(sel$meetwaarde[sel$parameter %in% "ZICHT"])>0 &
-                         length(sel$meetwaarde[sel$parameter %in% "WATDTE"])>0,
-                       sel$meetwaarde[sel$parameter %in% "ZICHT"]/sel$meetwaarde[sel$parameter %in% "WATDTE"], NA)
+  doorz_diep <- ifelse(length(sel$meetwaarde[sel$parameterid %in% "ZICHT_m"])>0 &
+                         length(sel$meetwaarde[sel$parameterid %in% "WATDTE_m"])>0,
+                       sel$meetwaarde[sel$parameterid %in% "ZICHT_m"]/sel$meetwaarde[sel$parameterid %in% "WATDTE_m"], NA)
   
   if(length(doorz_diep)==0){out <- NULL}else{ # hiermee worden automatisch alle oeverlocaties eruit gefilterd want op de droge oever worden geen doorzicht en diepte gemeten
   
-  diepte <- ifelse(length(sel$meetwaarde[sel$parameter %in% "WATDTE"])>0, sel$meetwaarde[sel$parameter %in% "WATDTE"], NA)
-  slib <- ifelse(length(sel$meetwaarde[sel$parameter %in% "SLIBDTE"])>0, sel$meetwaarde[sel$parameter %in% "SLIBDTE"], NA)
+  diepte <- ifelse(length(sel$meetwaarde[sel$parameterid %in% "WATDTE_m"])>0, sel$meetwaarde[sel$parameterid %in% "WATDTE_m"], NA)
+  slib <- ifelse(length(sel$meetwaarde[sel$parameterid %in% "SLIBDTE_m"])>0, sel$meetwaarde[sel$parameterid %in% "SLIBDTE_m"], NA)
   talud <- ifelse(length(sel$meetwaarde[sel$parameterid %in% "TALBVWTR_graad"])>0, sel$meetwaarde[sel$parameterid %in% "TALBVWTR_graad" ], NA)
    
-  n_soort_sub <- nrow(sel[sel$parameter %in% "" & sel$parameterfractie %in% "" & sel$biotaxonnaam %in% soortenlijst_submers,]) #LET OP: DIT IS VOOR W5 en verder
+  n_soort_sub <- nrow(sel[sel$parameterid %in% "PTN_BEDKG_%" & sel$parameterfractie %in% "" & sel$biotaxonnaam %in% soortenlijst_submers,]) #LET OP: DIT IS VOOR W5 en verder
   
-  woeker <- ifelse(length(sel$meetwaarde[sel$parameter %in% "" & sel$biotaxonnaam %in% soortenlijst_submers])==0,
-                   0, max(sel$meetwaarde[sel$parameter %in% "" & sel$biotaxonnaam %in% soortenlijst_submers])) # max bedekking van 1 submers soort
+  woeker <- ifelse(length(sel$meetwaarde[sel$parameterid %in% "PTN_BEDKG_%" & sel$biotaxonnaam %in% soortenlijst_submers])==0,
+                   0, max(sel$meetwaarde[sel$parameterid %in% "PTN_BEDKG_%" & sel$biotaxonnaam %in% soortenlijst_submers])) # max bedekking van 1 submers soort
   
   SUBMS <- sel$meetwaarde[sel$parameter %in% "SUBMSPTN" & sel$grootheid %in% "BEDKG"]
   if(!length(SUBMS)>0){

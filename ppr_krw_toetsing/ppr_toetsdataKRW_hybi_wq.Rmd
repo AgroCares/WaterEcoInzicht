@@ -43,6 +43,7 @@ require(R.utils)
 source('./scripts/ppr_funs_waterecoinzicht.R')
 source('./scripts/import_data.R')
 source('./scripts/validation.R')
+
 ```
 
 # Brondata EAGs
@@ -97,9 +98,11 @@ st_write(EAG, paste0('./data/EAG.gpkg'), append = FALSE)
 biotaxon <- data.table::fread(paste0('./input/', snapshot, '/biotaxon.csv'), fill = TRUE)
 parameter <- data.table::fread(paste0('./input/', snapshot, '/parameterid.csv'), fill = TRUE)
 locaties <- data.table::fread(paste0('./input/', snapshot, '/gebiedsinfo/Location.csv'), fill = TRUE)
+# remove GAFIDENT some not correct
+locaties[, GAFIDENT := NULL]
 
 # merge location with eag table for waterbody and watertype (as long as location is not updated automatically)
-locaties <- merge(locaties, eag_wl[,c('EAGIDENT','GAFNAAM','KRW_SGBP3','watertype')], by = 'EAGIDENT', all.x = TRUE, all.y =FALSE, suffixes = c('_locs','_eag'))
+locaties <- merge(locaties, eag_wl[,c('EAGIDENT','EAGNAAM','GAFIDENT','KRW_SGBP3','watertype')], by = 'EAGIDENT', all.x = TRUE, all.y =FALSE, suffixes = c('_locs','_eag'))
 # add GAF/ aan afvoergebied code (it is not correct in the table)
 locaties[,GAFIDENT := sapply(strsplit(EAGIDENT, '-'), `[`, 1)]
 locaties <- locaties[!is.na(CODE),]
@@ -144,8 +147,6 @@ eag_wt[, n_eag:= uniqueN(KRWwatertype.code), by = 'EAGIDENT']
 eag_wt <- eag_wt[n_eag>1,]
 
 # wat er in toetsing 2024 niet goed gaat
-# Botshol 2011 geen monsters in eag 2 
-# stichts ankeveen 2006 idem?
 # vinkeveen eag 3 in 2006 weg?
 # Kievitsbuurt 2006 en 2010 mist
 # SAP, 3201-EAG-2 mist tm 2012: mogelijk omdat er alleen OW en geen EZ locaties zijn? 
@@ -165,8 +166,10 @@ hybi <- import_wqdata(path = paste0('./input/', snapshot, '/hybi/'), location = 
 srow <- unique(hybi$categorie)
 #check duplicate values
 # 2023 data is duplicate with different bemonsteringsprotocol
-duplicate_hybi <- hybi[duplicated(hybi, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","monsterident" ,"externereferentie","datum","analysecode","compartiment","biotaxonnaam","lengteklasse","levensstadium","levensvorm","verschijningsvorm","geslacht", "limietsymbool","meetwaarde","waardebewerkingsmethode","afronding"))|duplicated(hybi, by=c("parameterid","locatie","monsterident" ,"externereferentie","datum","analysecode","compartiment","biotaxonnaam","lengteklasse","levensstadium","levensvorm","verschijningsvorm","geslacht", "limietsymbool","meetwaarde","waardebewerkingsmethode","afronding")),]
-hybi <- hybi[!duplicated(hybi, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","monsterident" ,"externereferentie","datum","analysecode","compartiment","biotaxonnaam","lengteklasse","levensstadium","levensvorm","verschijningsvorm","geslacht", "limietsymbool","meetwaarde","waardebewerkingsmethode","afronding"))]
+duplicate_hybi <- hybi[duplicated(hybi, incomparables=FALSE, fromLast=TRUE)|duplicated(hybi),]
+
+duplicate_hybi <- hybi[duplicated(hybi, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","monsterident","parameter", "parameterfractie",'eenheidequivalent','eenheidreferentie' ,"externereferentie","datum","analysecode","compartiment","biotaxonnaam","lengteklasse","levensstadium","levensvorm","verschijningsvorm","geslacht", "limietsymbool","meetwaarde","waardebewerkingsmethode","afronding"))|duplicated(hybi, by=c("parameterid","locatie","monsterident","parameter", "parameterfractie",'eenheidequivalent','eenheidreferentie' ,"externereferentie","datum","analysecode","compartiment","biotaxonnaam","lengteklasse","levensstadium","levensvorm","verschijningsvorm","geslacht", "limietsymbool","meetwaarde","waardebewerkingsmethode","afronding")),]
+hybi <- hybi[!duplicated(hybi, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","monsterident","parameter", "parameterfractie",'eenheidequivalent','eenheidreferentie' ,"externereferentie","datum","analysecode","compartiment","biotaxonnaam","lengteklasse","levensstadium","levensvorm","verschijningsvorm","geslacht", "limietsymbool","meetwaarde","waardebewerkingsmethode","afronding"))]
 # post process chemical data (take only relevant categories, which differs for each type of analysis) 4 use in atlas_toestand
 hybi <- ppr_wqdata(hybi, syear = 1900, srow= srow)
 hybi <- hybi[!meetwaarde == -999,]
@@ -184,18 +187,23 @@ saveRDS(hybi, file = './data/hybi.rds')
 #import chemical data
 fychem <- import_wqdata(path = paste0('./input/', snapshot, '/fychem/'), location = locaties, parameter = parameter, pattern = '.txt|.csv')
 srow <- unique(fychem$categorie)
+
 #check duplicate records
-duplicate_fychem <- fychem[duplicated(fychem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","limietsymbool","meetwaarde","waardebewerkingsmethode","afronding"))|duplicated(fychem,  by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","limietsymbool","meetwaarde","waardebewerkingsmethode","afronding")),]
+duplicate_fychem <- fychem[duplicated(fychem, incomparables=FALSE, fromLast=TRUE)|duplicated(fychem),]
+duplicate_fychem <- fychem[duplicated(fychem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","parameter","grootheid","eenheidequivalent","eenheidreferentie","parameterfractie","limietsymbool","meetwaarde","analyseprotocol","waardebewerkingsmethode","afronding"))|duplicated(fychem,  by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","parameter","grootheid","eenheidequivalent","eenheidreferentie","parameterfractie","limietsymbool","meetwaarde","analyseprotocol","waardebewerkingsmethode","afronding")),]
+
 # remove duplicates
-fychem <- fychem[!duplicated(fychem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","limietsymbool","meetwaarde","waardebewerkingsmethode","afronding"))]
+fychem <- fychem[!duplicated(fychem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","parameter","grootheid","eenheidequivalent","eenheidreferentie","parameterfractie","limietsymbool","meetwaarde","analyseprotocol","waardebewerkingsmethode","afronding"))]
 # post process chemical data (take only relevant categories, which differs for each type of analysis) 4 use in atlas_toestand
 fychem <- ppr_wqdata(fychem, syear = 1900, srow = c("METAL","VELD","ALG","ALGEN_KRWTOETS","ALGEN","IONEN","LANTACT","IONEN_KRWTOETS", "LICHT","MONSVAR","HYBIO","NUTRI","NUTRI_KRWTOETS","ALG_KRWTOETS"))
 fychem  <- fychem[!meetwaarde == -999,]
 # uniform certain paramters
 fychem[parameterid == "Ntot_mgN_l_nf", parameterid:= "Ntot_mgN_l"]
 fychem[parameterid == "Cl_mg_l_nf", parameterid:= "Cl_mg_l"]
+fychem[parameterid == "SO4_mg_l_nf", parameterid:= "SO4_mg_l"]
+fychem[parameterid == "Ca_mg_l_nf", parameterid:= "Ca_mg_l"]
 fychem[parameterid == "CHLFa_ug_l" & analyseprotocol == 'A3020', parameterid:= "CHLFa_ug_l_spectro"]
-fychem[parameterid == "CHLFa_ug_l" & analyseprotocol == 'A3220', parameterid:= "CHLFa_ug/l_fluo"]
+fychem[parameterid == "CHLFa_ug_l" & analyseprotocol == 'A3220', parameterid:= "CHLFa_ug_l_fluo"]
    
 # write hybi.rds
 saveRDS(fychem, file = './data/fychem.rds')
@@ -205,12 +213,33 @@ saveRDS(fychem, file = './data/fychem.rds')
 #import chemical data
 bodchem <- import_wqdata(path = paste0('./input/', snapshot, '/bodemchemie/'), location = locaties, parameter = parameter, pattern = '.txt')
 #check duplicate records
-duplicate_bod <- bodchem[duplicated(bodchem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","compartiment","datum","biotaxonnaam","limietsymbool","meetwaarde","waardebewerkingsmethode","afronding")),]
+duplicate_bod <- bodchem[duplicated(bodchem, incomparables=FALSE, fromLast=TRUE),]
+duplicate_bod <- bodchem[duplicated(bodchem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","parameter","grootheid","eenheidequivalent","eenheidreferentie","parameterfractie","limietsymbool","meetwaarde","analyseprotocol","waardebewerkingsmethode","afronding"))|duplicated(bodchem,  by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","parameter","grootheid","eenheidequivalent","eenheidreferentie","parameterfractie","limietsymbool","meetwaarde","analyseprotocol","waardebewerkingsmethode","afronding")),]
+# remove duplicate records
+bodchem <- bodchem[!duplicated(bodchem, incomparables=FALSE, fromLast=TRUE, by=c("parameterid","locatie","externereferentie","monsterident","compartiment","analyse","datum","biotaxonnaam","parameter","grootheid","eenheidequivalent","eenheidreferentie","parameterfractie","limietsymbool","meetwaarde","analyseprotocol","waardebewerkingsmethode","afronding"))]
+
 # post process chemical data
 bodchem <- ppr_wqdata(bodchem, syear = 1900, srow = c("IONEN","NUTRI","ALG","VELD","ALGEN","LICHT","MONSVAR","METAL","NUTRI_KRWTOETS","ALG_KRWTOETS","IONEN_KRWTOETS"))
 bodchem  <- bodchem[!meetwaarde == -999,]
+bodchem <- bodchem[compartiment == 'BS' & jaar == 2024, compartiment := 'SB']
+bodchem[parameterid == 'Fe_mg_l', parameterid:= 'Fe_mg_l_nf']
+bodchem[parameterid == 'Ptot_mgP_l' & compartiment == 'PW', parameterid:= 'Ptot_mgP_l_nf']
+bodchem[parameterid == 'Stot_mgS_l' & compartiment == 'PW', parameterid:= 'Stot_mgS_l_nf']
+bodchem[parameterid == 'Stot_mgS_l' & compartiment == 'PW', parameterid:= 'Stot_mgS_l_nf']
+bodchem[parameterid == 'Ptot_mg_l_ng', parameterid:= 'Ptot_mgP_l_ng']
+bodchem[parameterid == 'S_mg_l_nf'& compartiment == 'PW', parameterid:= 'S_mg_l_OPGLT']
 # write bodchem.rds
 saveRDS(bodchem, file = './data/bodchem.rds')
+
+# hier dcast om tabel met header kwaliteitslementen te maken
+bod_overzicht <- dcast.data.table(setDT(bodchem), EAGIDENT+compartiment~jaar, value.var ='parameterid', fill = "", fun.aggregate = uniqueN)
+bod_overzicht <- dcast.data.table(setDT(bodchem), EAGIDENT+parameterid+compartiment~jaar, value.var ='locatie', fill = "", fun.aggregate = uniqueN)
+
+# nalevering obv relaties baggernut
+baggernut <- calc_watbod(bodchem)
+fwrite(bodchem, file= paste0('bodemchem.csv'), sep = ';', dec ='.')
+fwrite(baggernut, file= paste0('baggernut.csv'), sep = ';', dec ='.')   
+
 ```
 
 # Overzicht data Hybi
@@ -332,7 +361,7 @@ write.table(dashboard_data, file = paste("./output/ECOLOGIE_TOESTANDOORDEELTREND
 
 ```{r eval = FALSE}
 # load data on Q and P from waterbalansen: set the project dir of were the excel files are located 
-dat <- loadBalances_lm(dir_bal = 'c:/Users/laura/OneDrive - SPRINGG/Documents/Waternet_data/waterbalansen/')
+dat <- loadBalances(dir_bal = paste0(Sys.getenv("NMI-SITE"), 'O 2000 - O 2001/2074.N.25 Update watismijnwaterkwaliteit/03. Data en resultaten/'))
 setDT(dat)
 dat[,date := as.POSIXct(paste0(jaar,"-",maand,"-01"), format = '%Y-%m-%d')]
 # add gebiedscodes per balance
@@ -394,7 +423,7 @@ veg_mons <- hybi$monsterident[hybi$analyse == 'PTN']
 macft <- hybi[monsterident %in% veg_mons & !is.na(monsterident) & !is.na(EAGIDENT) & !EAGIDENT == "",]
 
 #### KOPPELING AAN BIOTAXON_INFO (oeversoorten en submerse soorten)-----------------------------
-soortenlijst_submers <- na.omit(unique(macft$biotaxonnaam[macft$submers == '1']))
+soortenlijst_submers <- na.omit(unique(macft$biotaxonnaam[macft$submers == '1'& !macft$drijvend == '1']))
 soortenlijst_emers <- na.omit(unique(macft$biotaxonnaam[macft$emers == '1']))
 soortenlijst_oever <- na.omit(unique(macft$biotaxonnaam[macft$oever == '1']))
 soortenlijst_kroos <- na.omit(unique(macft$biotaxonnaam[macft$kroos == '1']))
@@ -403,7 +432,7 @@ soortenlijst_kroos <- na.omit(unique(macft$biotaxonnaam[macft$kroos == '1']))
 grens_drijf <- 40 # 10 is 0.6 ekr in sloten, 40 is beschrijving EST en ekr 0.4
 grens_zicht <- 0.6 # licht op de bodem
 grens_n_soort <- 5 # species
-grens_woeker <- 70 
+grens_woeker <- 50 
 grens_submers <- 30 # grens submers sloten
 grens_kroos <- 15 # grens kroos sloten 15
 grens_flab <- 50 #  grens flab sloten 15 onvoldoende onderscheidend, bij > 50% neemt de ekr af
@@ -456,9 +485,7 @@ est_wq <- merge(esteag, wqmeanEAG[compartiment == 'OW',], by=c('EAGIDENT','jaar'
 toestandbeschrijving_eag <- toestandbeschrijving(est_wq)
 saveRDS(toestandbeschrijving_eag, file = './data/eagtoestandbeschrijving.rds')
 
-# validate koppeltabel tbv factsheets (are all possible EST's present in koppeltabel 2 pictures)
-checkkt <- EST[!estnaam %in% unique(EST_kt$estnaam),]
-unique(checkkt$estnaam)
+
 
 ```
 
