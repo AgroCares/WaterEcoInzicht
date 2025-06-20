@@ -281,15 +281,17 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
   maatregelen1[,BeoogdInitiatiefnemer := Initiatiefnemer.waternet]
   maatregelen1[,esffrst := substr(esf,1,4)]
   maatregelen1[nchar(esffrst)==0, esffrst := NA]
+  # maatregelen1[!is.na(`Totale belasting P`) & eenheid == 'mg/m2/dag', OmvangWaternet := OmvangWaternet/`Totale belasting P`]
+  # maatregelen1[!is.na(`Totale belasting P`) & eenheid == 'mg/m2/dag', eenheid := '% reductie']
   
   # join measures with ESF-tabel
   cols <- c('Naam','Toelichting','SGBPPeriode','esffrst','Initiatiefnemer','BeoogdInitiatiefnemer',
-            'Gebiedspartner','UitvoeringIn',"afweging")
+            'Gebiedspartner','OmvangWaternet','eenheid','UitvoeringIn',"afweging")
   ESFtab[,esf:= paste0('ESF',esf)]
   maatregelen2 <- merge.data.table(ESFtab, maatregelen1[,mget(cols)],by.x = 'esf', by.y = 'esffrst', all.y = T)
   
   # als meerdere esf aan een maatregel gekoppeld zijn dan wordt de eerste geselecteerd
-  cols <- c('ESFoordeel','SGBPPeriode','Naam','Toelichting','Initiatiefnemer','BeoogdInitiatiefnemer','Gebiedspartner','UitvoeringIn','afweging')
+  cols <- c('ESFoordeel','SGBPPeriode','Naam','Toelichting','Initiatiefnemer','BeoogdInitiatiefnemer','OmvangWaternet','eenheid','Gebiedspartner','UitvoeringIn','afweging')
   maatregelen2[,ESFoordeel := OORDEEL]
   maatregelen2[is.na(ESFoordeel), ESFoordeel := '![esficon](esf/9grijsnummer.jpg ){width=50px}']
   maatregelen2 <- maatregelen2[,mget(cols)]
@@ -860,33 +862,68 @@ ppr_extinctie <- function(wq1, hybi1, filter = c('EXTTCEFCELBT__m_L400-700nm', '
 ppr_waterdieptesloot <- function(hybi1, filter = c('WATDTE_m','ZICHT_m')){
 
   # diepte4licht <- log(25)/1.2
-  hybi2 <- hybi1[parameterid %in% filter & jaar == max(jaar),]
+  hybi2 <- hybi1[parameterid %in% filter ,]
   # remove values that cannot exists (negative depths)
   hybi2[meetwaarde < 0, meetwaarde := NA]
-  
-  p <-
-    ggplot()+
-    geom_boxplot(data = hybi2,aes(x= EAGIDENT, y= meetwaarde, col = parameterid_naam)) +
-    # geom_boxplot(data = dz,aes(x= EAGIDENT, y= meetwaarde, col = watertype)) +
-    theme_minimal()+ 
-    scale_y_reverse(limits=c(max(hybi2$meetwaarde)+0.1,0)) +
-    guides(col=guide_legend(title="Parameter"))+
+  # ##---------------
+  # p <-
+  #   ggplot()+
+  #   geom_boxplot(data = hybi2,aes(x= EAGIDENT, y= meetwaarde, col = parameterid_naam)) +
+  #   # geom_boxplot(data = dz,aes(x= EAGIDENT, y= meetwaarde, col = watertype)) +
+  #   theme_minimal()+ 
+  #   scale_y_reverse(limits=c(max(hybi2$meetwaarde)+0.1,0)) +
+  #   guides(col=guide_legend(title="Parameter"))+
+  #   theme(
+  #     strip.background = element_blank(),
+  #     axis.text.x = element_text(angle = 30, hjust =1),
+  #     axis.text.y = element_text(size= 10),
+  #     panel.background = element_blank(),
+  #     plot.background = element_blank(),
+  #     axis.title = element_text(size=10),
+  #     axis.ticks =  element_line(colour = "black"),
+  #     axis.line = element_line(colour='black'),
+  #     legend.title = element_text(size = 10, face = 'bold'),
+  #     legend.text  = element_text(size = 10),
+  #     legend.key.size = unit(0.9, "lines"),
+  #     legend.position = "right")+
+  #   ggtitle('') +
+  #   labs(x= '', y = 'diepte (m)')
+  ##------------------
+  hybi2[jaar<2019&jaar>2015,jaar_int:='2016 t/m 2018']
+  hybi2[jaar<2022&jaar>2018,jaar_int:='2019 t/m 2021']
+  hybi2[jaar<2025&jaar>2021,jaar_int:='2022 t/m 2024']
+  # add N obs
+  hybi2[,n_obs:=uniqueN(locatie),by =c('EAGIDENT','jaar_int')]
+  hybi2[,n_obs:=paste0('Aantal monsters: ',n_obs)]
+
+  sel_agg <- dcast(hybi2, EAGIDENT+jaar_int+n_obs~parameterid, value.var = 'meetwaarde', fun.aggregate = mean, fill=FALSE)
+  sel_agg <- sel_agg[!is.na(jaar_int),]
+  p<-ggplot() +
+    geom_col(data = sel_agg, aes(x= jaar_int, y = -1*WATDTE_m, fill = 'maximale waterdiepte (m)')) +
+    geom_col(data = sel_agg, aes(x= jaar_int, y = -1*ZICHT_m, fill = 'doorzicht (m)')) +
+    scale_fill_manual(values = c("darkblue","skyblue"), na.value = "#A6761D")+
+    facet_grid(.~ EAGIDENT+n_obs, space = 'free_x', scales = 'free_x', switch = 'x')+
+    theme_minimal(base_size = 15)+
     theme(
       strip.background = element_blank(),
-      axis.text.x = element_text(angle = 30, hjust =1),
-      axis.text.y = element_text(size= 10),
-      panel.background = element_blank(),
-      plot.background = element_blank(),
-      axis.title = element_text(size=10),
+      strip.text.y = element_text(size = 12),
+      axis.text.x = element_text(size = 15, vjust = 0.8, angle = 90),
+      axis.text.y = element_text(size = 15),
+      axis.title = element_text(size= 15),
       axis.ticks =  element_line(colour = "black"),
       axis.line = element_line(colour='black'),
-      legend.title = element_text(size = 10, face = 'bold'),
-      legend.text  = element_text(size = 10),
-      legend.key.size = unit(0.9, "lines"),
-      legend.position = "right")+
-    ggtitle('') +
-    labs(x= '', y = 'diepte (m)')
-
+      plot.title = element_text(size =18, face="bold", hjust = 0.5),
+      panel.background = element_blank(),
+      panel.border = element_rect(colour='black', fill = NA),
+      plot.background = element_blank(),
+      legend.position = "bottom",
+      legend.box.just = "center"
+    )+
+    guides(fill = guide_legend(title = '', title.vjust = 1))+
+    guides(color = guide_legend(title = ''))+
+    ggtitle(paste0("Waterdiepte & doorzicht")) +
+    labs(x= '' , y= 'meter')
+  
   # return
   return(p)
 
@@ -895,63 +932,64 @@ ppr_plotbod <- function(bod1, type='grid'){
 
   # dcast slootbodem
   selb <- dcast.data.table(bod1, EAGIDENT+locatie+datum+jaar ~ parameterid+compartiment, value.var = "meetwaarde", fun.aggregate = mean)
-  selb[,FESPDWratio := (Fe_mg_kg_dg_SB/55.845 - Stot_mgS_kg_dg_SB/32.065)/(Ptot_gP_kg_dg_SB*1000/30.974)]
-  selb[,FESPDWratio_FeP := (Fe_mg_kg_dg_SB/55.845)/(Ptot_gP_kg_dg_SB*1000/30.974)]
+  selb[,jaar:= as.character(jaar)]
   
-  # calculate relevant ratios
-  if(is.null(selb$Stot_mgS_mg_l_ng_SB)){
-    selb[,FESFWratio := FESPDWratio]}
-  if(!is.null(selb$Stot_mgS_mg_l_ng_SB)){
-    selb[,FESPFWratio := (Fe_mg_l_ng_SB/55.845 - Stot_mgS_l_ng_SB/32.065)/(Ptot_mgP_l_ng_SB/30.974)]}
-
+  # calculate relevant ratios SB (ng & dg)
+  selb[,FESP_DWratio := (Fe_mg_kg_dg_SB/55.845 - Stot_mgS_kg_dg_SB/32.065)/(Ptot_gP_kg_dg_SB*1000/30.974)]
+  selb[,FESP_DWratio_FeP := (Fe_mg_kg_dg_SB/55.845)/(Ptot_gP_kg_dg_SB*1000/30.974)]
+  if(is.null(selb$Stot_mgS_l_ng_SB)){
+    selb[,FESP_FWratio := FESP_DWratio]}
+  if(!is.null(selb$Stot_mgS_l_ng_SB)){
+    selb[,FESP_FWratio := (Fe_mg_l_ng_SB/55.845 - Stot_mgS_l_ng_SB/32.065)/(Ptot_mgP_l_ng_SB/30.974)]
+    selb[,FESP_FWratio_FeP := (Fe_mg_l_ng_SB/55.845)/(Ptot_mgP_l_ng_SB/30.974)]}
   # convert iron into similar parcode
   if(is.null(selb$Fe_mg_l_nf_PW)&!is.null(selb$Fe_mg_l_PW)){
-    selb$Fe_mg_l_nf_PW <- selb$Fe_mg_l_PW
-  }
+    selb$Fe_mg_l_nf_PW <- selb$Fe_mg_l_PW}
   if(is.null(selb$Ptot_mgP_l_nf_PW)&!is.null(selb$Ptot_mgP_l_PW)){
-    selb$Ptot_mgP_l_nf_PW <- selb$Ptot_mgP_l_PW
-  }
+    selb$Ptot_mgP_l_nf_PW <- selb$Ptot_mgP_l_PW}
   if(is.null(selb$Stot_mgS_l_nf_PW)&!is.null(selb$Stot_mgS_l_PW)){
-    selb$Stot_mgS_l_nf_PW <- selb$Stot_mgS_l_PW
-  }
-  
-  # add SP-ratio
+    selb$Stot_mgS_l_nf_PW <- selb$Stot_mgS_l_PW}
+  # add SP-ratio PW
   if(is.null(selb$Stot_mgS_l_nf_PW)&!is.null(selb$SO4_mg_l_nf_PW)){
-    selb[!is.na(SO4_mg_l_nf_PW), FESPPWratio := (Fe_mg_l_nf_PW/55.845 - SO4_mg_l_nf_PW/96.06)/(Ptot_mgP_l_nf_PW/30.974)]
-    selb[!is.na(SO4_mg_l_nf_PW), FESPPWratio_FeS := (Fe_mg_l_nf_PW/55.845)/(SO4_mg_l_nf_PW/96.06)]
-    selb[, FESPPWratio_FeP := (Fe_mg_l_nf_PW/55.845)/(Ptot_mgP_l_nf_PW/30.974)]
+    selb[!is.na(SO4_mg_l_nf_PW), FESP_PWratio := (Fe_mg_l_nf_PW/55.845 - SO4_mg_l_nf_PW/96.06)/(Ptot_mgP_l_nf_PW/30.974)]
+    selb[!is.na(SO4_mg_l_nf_PW), FESP_PWratio_FeS := (Fe_mg_l_nf_PW/55.845)/(SO4_mg_l_nf_PW/96.06)]
+    selb[, FESP_PWratio_FeP := (Fe_mg_l_nf_PW/55.845)/(Ptot_mgP_l_nf_PW/30.974)]
   }
   if(!is.null(selb$Stot_mgS_l_nf_PW)){
-    selb[!is.na(Stot_mgS_l_nf_PW),FESPPWratio := (Fe_mg_l_nf_PW/55.845 - Stot_mgS_l_nf_PW/32.065)/(Ptot_mgP_l_nf_PW/30.974)]
-    selb[!is.na(Stot_mgS_l_nf_PW),FESPPWratio_FeS := (Fe_mg_l_nf_PW/55.845)/(Stot_mgS_l_nf_PW/32.065)]
-    selb[,FESPPWratio_FeP := (Fe_mg_l_nf_PW/55.845)/(Ptot_mgP_l_nf_PW/30.974)]
+    selb[!is.na(Stot_mgS_l_nf_PW),FESP_PWratio := (Fe_mg_l_nf_PW/55.845 - Stot_mgS_l_nf_PW/32.065)/(Ptot_mgP_l_nf_PW/30.974)]
+    selb[!is.na(Stot_mgS_l_nf_PW),FESP_PWratio_FeS := (Fe_mg_l_nf_PW/55.845)/(Stot_mgS_l_nf_PW/32.065)]
+    selb[,FESP_PWratio_FeP := (Fe_mg_l_nf_PW/55.845)/(Ptot_mgP_l_nf_PW/30.974)]
   }
-  
   # calculate nalevering
-  selb[,nlvrFW := 0.0247 * Ptot_mgP_l_ng_SB - 1.6035]
-  
+  selb[,nlvr_FW := 0.0247 * Ptot_mgP_l_ng_SB - 1.6035]
   if(!is.null(selb$Ptot_mgP_l_nf_PW)){
-    selb[,nlvrPW := 0.8095 * selb$Ptot_mgP_l_nf_PW - 0.2905]  
+    selb[,nlvr_PW := 0.8095 * selb$Ptot_mgP_l_nf_PW - 0.2905]  
   }
+  
+  # add N obs
+  selb[,n_obs:=uniqueN(locatie),by =c('EAGIDENT','jaar')]
+  selb[,n_obs:=paste0('Aantal monsters: ',n_obs)]
   
   if(nrow(selb)>0){
     #Function for scaling y axis 2 decimals
     scaleFUN <- function(x) sprintf("%.2f", x)
   
-  if(!is.null(selb$FESPFWratio)){
+  if(!is.null(selb$FESP_FWratio)){
   # filter only op samples where FESPFWratio, FESPDWratio and FESPPWratio are present
-  selb <- selb[!(is.na(FESPFWratio)),]
-  #FW
-  selb[,classFESPFWratio := cut(FESPFWratio, breaks = c((min(FESPFWratio)-1), 1.4, 4, max(FESPFWratio)), labels = c('geen ijzerval', 'beperkte ijzerval', 'functionele ijzerval'))]
-  selb[FESPFWratio >= 4, nlvrFW := 0.1 * nlvrFW] # BaggerNut Tool zegt 0-1
-  selb[FESPFWratio < 4 & FESPFWratio > 1.4, nlvrFW := 0.5 * nlvrFW] # BaggerNut zegt < nlvrFW & > 0-1
-  selb[FESPFWratio <= 1.4, nlvrFW := nlvrFW]
-  selb[nlvrFW < 0,nlvrFW := 0]
+  selb <- selb[!(is.na(FESP_FWratio)),]
+  # FW
+  selb[,classFESP_FWratio := cut(FESP_FWratio, breaks = c((min(FESP_FWratio)-1), 1.4, 4, max(FESP_FWratio)), labels = c('geen ijzerval', 'beperkte ijzerval', 'functionele ijzerval'))]
+  selb[FESP_FWratio >= 4, nlvr_FW := 0.1 * nlvr_FW] # BaggerNut Tool zegt 0-1
+  selb[FESP_FWratio < 4 & FESP_FWratio > 1.4, nlvr_FW := 0.5 * nlvr_FW] # BaggerNut zegt < nlvrFW & > 0-1
+  selb[FESP_FWratio <= 1.4, nlvr_FW := nlvr_FW]
+  selb[nlvr_FW < 0,nlvr_FW := 0]
+  selb[,jaar:= as.character(jaar)]
   
-  plotFW <- ggplot(selb, aes(x= EAGIDENT, y= nlvrFW, fill = classFESPFWratio))+
-    geom_boxplot() +
+  plotFW <- ggplot(selb, aes(x= jaar, y= nlvr_FW, fill = classFESP_FWratio))+
+    geom_boxplot(outliers = FALSE) +
     scale_y_continuous(labels=scaleFUN)+
     theme_minimal()+
+    facet_grid(.~EAGIDENT+n_obs)+
     theme(
       strip.background = element_blank(),
       title = element_text(size= 10),
@@ -970,19 +1008,20 @@ ppr_plotbod <- function(bod1, type='grid'){
     ggtitle( "Potentiële nalevering") +
     labs(x="",y="P mg/m2/dag\n", fill = '')}
 
-  if(!is.null(selb$FESPPWratio)){
+  if(!is.null(selb$FESP_PWratio)){
     # filter only op samples where FESPFWratio, FESPDWratio and FESPPWratio are present
-    selb <- selb[!(is.na(FESPPWratio)),]
-    selb[FESPPWratio_FeP > 10 & FESPPWratio_FeS > 1, c('nlvrPW','classFESPPWratio') := list(0.1*nlvrPW,'functionele ijzerval') ]  # dit is ook onder zuurstofloze omstandigheden gunstiger # BaggerNut zegt lage nalevering
-    selb[FESPPWratio_FeP > 1 & FESPPWratio_FeS > 1, c('nlvrPW','classFESPPWratio') := list(0.5*nlvrPW,'functionele ijzerval') ]  # BaggerNut zegt lage nalevering
-    selb[FESPPWratio_FeP > 1 & FESPPWratio_FeS <= 1, c('nlvrPW','classFESPPWratio') := list(0.5*nlvrPW,'beperkte ijzerval')] # BaggerNut zegt < nlvrPW 
-    selb[FESPPWratio_FeP <= 1, c('nlvrPW','classFESPPWratio') := list(nlvrPW,'geen ijzerval')]
-    selb[nlvrPW < 0,nlvrPW := 0]
+    selb <- selb[!(is.na(FESP_PWratio)),]
+    selb[FESP_PWratio_FeP > 10 & FESP_PWratio_FeS > 1, c('nlvr_PW','classFESP_PWratio') := list(0.1*nlvr_PW,'functionele ijzerval') ]  # dit is ook onder zuurstofloze omstandigheden gunstiger # BaggerNut zegt lage nalevering
+    selb[FESP_PWratio_FeP > 1 & FESP_PWratio_FeS > 1, c('nlvr_PW','classFESP_PWratio') := list(0.5*nlvr_PW,'functionele ijzerval') ]  # BaggerNut zegt lage nalevering
+    selb[FESP_PWratio_FeP > 1 & FESP_PWratio_FeS <= 1, c('nlvr_PW','classFESP_PWratio') := list(0.5*nlvr_PW,'beperkte ijzerval')] # BaggerNut zegt < nlvrPW 
+    selb[FESP_PWratio_FeP <= 1, c('nlvr_PW','classFESP_PWratio') := list(nlvr_PW,'geen ijzerval')]
+    selb[nlvr_PW < 0,nlvr_PW := 0]
     
-  qPW <- ggplot(selb, aes(x= EAGIDENT, y= nlvrPW, fill = classFESPPWratio))+
-      geom_boxplot() +
+  qPW <- ggplot(selb, aes(x= jaar, y= nlvr_PW, fill = classFESP_PWratio))+
+      geom_boxplot(outliers = FALSE) +
       scale_y_continuous(labels=scaleFUN)+
       theme_minimal()+
+      facet_grid(.~EAGIDENT+n_obs)+
       theme(
         strip.background = element_blank(),
         title = element_text(size= 10),
@@ -1003,11 +1042,12 @@ ppr_plotbod <- function(bod1, type='grid'){
   }
   
   if(!is.null(selb$Ptot_gP_kg_dg_SB)){  
-    selb <- selb[!(is.na(FESPDWratio)),]
-    selb[,classFESPDWratio := cut(FESPDWratio, breaks = c((min(FESPDWratio)-1), 1.4, 4, max(FESPDWratio)), labels = c('geen ijzerval', 'beperkte ijzerval', 'functionele ijzerval'))]
-    qBS <- ggplot(selb, aes(x= EAGIDENT, y= Ptot_gP_kg_dg_SB, fill = classFESPDWratio))+
-    geom_boxplot() +
+    selb <- selb[!(is.na(FESP_DWratio)),]
+    selb[,classFESP_DWratio := cut(FESP_DWratio, breaks = c((min(FESP_DWratio)-1), 1.4, 4, max(FESP_DWratio)), labels = c('geen ijzerval', 'beperkte ijzerval', 'functionele ijzerval'))]
+  qBS <- ggplot(selb, aes(x= jaar, y= Ptot_gP_kg_dg_SB, fill = classFESP_DWratio))+
+    geom_boxplot(outliers = FALSE) +
     scale_y_continuous(labels=scaleFUN)+
+      facet_grid(.~EAGIDENT+n_obs)+
     theme_minimal()+
     theme(
       strip.background = element_blank(),

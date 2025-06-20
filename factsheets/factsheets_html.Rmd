@@ -190,8 +190,7 @@ options(kableExtra.auto_format = FALSE)
 
 # maatregelen, select only the relevant items for html and word file (ignore the latex columns)
 maatregelen2 <- as.data.table(out$maatregelen2)
-cols <- c('ESFoordeel','SGBPPeriode','Naam','Toelichting','BeoogdInitiatiefnemer',
-          'UitvoeringIn')
+cols <- c('ESFoordeel','SGBPPeriode','Naam','Toelichting','BeoogdInitiatiefnemer','OmvangWaternet','eenheid','UitvoeringIn')
 maatregelen2<- maatregelen2[,mget(cols)]
 
 if(outputF == "word" & nrow(maatregelen2)>0){
@@ -201,8 +200,6 @@ if(outputF == "word" & nrow(maatregelen2)>0){
           column_spec(2, width = "12em", border_right = F)%>%
           collapse_rows(columns=1, valign="top")
 }
-
-
 
 if(outputF == "html" & nrow(maatregelen2)>0){
   knitr::kable(maatregelen2, format = "html") %>% 
@@ -274,14 +271,14 @@ if(nrow(pvskplegend_tab)>0){
 
 ### Brondata: Metingen fysisch-chemie (`r out$wqversie`) en hydrobiologie (`r out$hybiversie`)
 
-De verticale extinctie is een maat voor de uitdoving van neerwaarts gericht licht in het water. Licht verzwakt onder water doordat het wordt geabsorbeerd en gereflecteerd door deeltjes (algen, humus, zwevend-stof) en water zelf. Hoe hoger de extinctie, hoe minder licht er op de waterbodem valt (een hoge extinctie staat lager op de y-as dan een lage). In de figuur met verticale extinctie staan referentielijnen met extincties waarbij op verschillende diepten nog voldoende (4%) licht op de bodem valt voor plantengroei. Als de extinctie lager is (hoger in de grafiek) dan deze lijnen valt er voldoende licht voor plantengroei op deze diepte. In sloten wordt geen verticale extinctie gemeten. Hier laat de grafiek de waterdiepte en het doorzicht zien. Als doorzicht/waterdiepte groter is dan 0.6 gaat dan valt er voldoende licht op de waterbodem voor plantengroei.
+Verticale extinctie is een maat voor de uitdoving van neerwaarts gericht licht in het water. Licht verzwakt onder water doordat het wordt geabsorbeerd en gereflecteerd door deeltjes (algen, humus, zwevend-stof) en water zelf. Hoe hoger de extinctie, hoe minder licht er op de waterbodem valt (let op: een hoge extinctie staat lager op de y-as dan een lage) en hoe minder licht er beschikbaar is voor plantengroei. In de figuur met verticale extinctie staan referentielijnen met extincties waarbij nog voldoende (4%) licht op de bodem valt voor plantengroei. Als de extinctie lager is (hoger in de grafiek) dan deze lijnen, valt er voldoende licht voor plantengroei op deze diepte. In sloten wordt geen verticale extinctie gemeten. Hier laat de grafiek de waterdiepte en het doorzicht zien. Bij een doorzicht/waterdiepte groter dan 0.6 valt er voldoende licht op de waterbodem voor plantengroei. Als de waterdiepte minder is dan 35 cm kan er vaak wel licht tot de bodem doordringen, maar is de waterdiepte zelf een belemmering voor plantengroei.
 
 ### Brondata: Metingen waterbodemchemie (`r out$bodversie`)
 
+De actuele en potentiële nalevering van P uit de waterbodem is ingeschat op basis van emprische relaties die zijn afgeleid in het project BaggerNut (WaterBODEMbeheer in Nederland: Maatregelen BAGGERen en NUTriënten (BAGGERNUT)  - Metingen Interne Nutriëntenmobilisatie en Decompositie (MIND) Tussenrapportage 2012, B-Ware). De actuele nalevering (wat er vrij komt op het tijdstip van bemonsteren) is ingeschat op basis van metingen van P, Fe en S in het porievocht van de toplaag van de waterbodem. De potentiële nalevering (wat er vrij kan komen) is ingeschat op basis van totaalgehalten van P, Fe en S in verse bodem in mg/l natgewicht. 
 
 
 ##  EKR scores op alle deelmaatlatten in de tijd {data-height="600"}
-
 
 ```{r ekrtijd, echo= FALSE, warning = FALSE, message = FALSE, out.width= "100%"}
 
@@ -294,7 +291,6 @@ if(outputF == "word"){
     out$plotEKRlijn
 }
 ```
-
 
 # Begrippenlijst en afkortingen
 
