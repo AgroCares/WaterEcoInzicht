@@ -4,7 +4,7 @@
 # extractfunctie for extracting relevant properties and data needed for single factsheet ----
 factsheetExtract <- function(i,brondata,splot = TRUE){ 
   with(brondata, {
-  # i <- 23
+  # i <- 9
   # subset data ----
   # subset ESFoordelen and get ESF
   waterlichamenwl <- ESFoordelen[i,]
@@ -66,7 +66,7 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
   # get soil ditch properties
   if('EAGIDENT' %in% colnames(bod)){
     bod1 <- bod[EAGIDENT %in% eagwl$EAGIDENT,]
-    bod1 <- bod1[jaar == max(jaar),]
+    # bod1 <- bod1[jaar == max(jaar),]
     bodversie <- unique(bod1$jaar)
   }
   
@@ -285,13 +285,13 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
   # maatregelen1[!is.na(`Totale belasting P`) & eenheid == 'mg/m2/dag', eenheid := '% reductie']
   
   # join measures with ESF-tabel
-  cols <- c('Naam','Toelichting','SGBPPeriode','esffrst','Initiatiefnemer','BeoogdInitiatiefnemer',
+  cols <- c('Naam','ToelichtingUitgebreid','SGBPPeriode','esffrst','Initiatiefnemer','BeoogdInitiatiefnemer',
             'Gebiedspartner','OmvangWaternet','eenheid','UitvoeringIn',"afweging")
   ESFtab[,esf:= paste0('ESF',esf)]
   maatregelen2 <- merge.data.table(ESFtab, maatregelen1[,mget(cols)],by.x = 'esf', by.y = 'esffrst', all.y = T)
   
   # als meerdere esf aan een maatregel gekoppeld zijn dan wordt de eerste geselecteerd
-  cols <- c('ESFoordeel','SGBPPeriode','Naam','Toelichting','Initiatiefnemer','BeoogdInitiatiefnemer','OmvangWaternet','eenheid','Gebiedspartner','UitvoeringIn','afweging')
+  cols <- c('ESFoordeel','SGBPPeriode','Naam','ToelichtingUitgebreid','Initiatiefnemer','BeoogdInitiatiefnemer','OmvangWaternet','eenheid','Gebiedspartner','UitvoeringIn','afweging')
   maatregelen2[,ESFoordeel := OORDEEL]
   maatregelen2[is.na(ESFoordeel), ESFoordeel := '![esficon](esf/9grijsnummer.jpg ){width=50px}']
   maatregelen2 <- maatregelen2[,mget(cols)]
@@ -300,7 +300,7 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
   setorder(maatregelen2,ESFoordeel,-SGBPPeriode)
   
   # formatting (avoid characters that conflict with latex)
-  maatregelen2[, Toelichting := gsub('%','\\%',Toelichting,fixed=TRUE)]
+  maatregelen2[, Toelichting := gsub('%','\\%',ToelichtingUitgebreid,fixed=TRUE)]
   maatregelen2[, Gebiedspartner := gsub('\\?','onbekend',Gebiedspartner)]
   maatregelen2[, Naam := gsub('%','\\%',Naam,fixed=TRUE)]
   
@@ -331,7 +331,7 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
   if(nrow(wq1[parameterid == "EXTTCEFCELBT__m_L400-700nm" & jaar > '2015',]) > 0) {
     
     # plot ESF 2
-    plotLichtklimaat = ppr_extinctie(wq = wq1, hybi = hybi1, filter = c('EXTTCEFCELBT__m_L400-700nm','EXTTCEFCELBT_m_L400-700nm','WATDTE_m'))
+    plotLichtklimaat = ppr_extinctie(wq1, hybi1)
     class(plotLichtklimaat.ref) <- 'plotref'
   } else {
     
@@ -352,7 +352,7 @@ factsheetExtract <- function(i,brondata,splot = TRUE){
   if(nrow(hybi1[parameterid == 'WATDTE_m',])>0){
     
     # plot ESF 4
-    plotWaterdiepte = ppr_waterdieptesloot(hybi1[!is.na(parameterid == 'WATDTE_m'),], filter = c('WATDTE_m','ZICHT_m'))
+    plotWaterdiepte = ppr_waterdieptesloot(hybi1[!is.na(parameterid == 'WATDTE_m'),], filter = c("SLIBDTE_m",'WATDTE_m','ZICHT_m'))
     class(plotWaterdiepte.ref) <- 'plotref'
   } else {
     
@@ -605,7 +605,6 @@ plotEKRlijnfs <- function(EKRset1, gebied = NULL){
 
 return(p)
 }
-
 # maak plot van p VS Kp
 ppr_pvskpplot <- function(pvskpsel, lakeditch = 'ditch'){
 
@@ -618,7 +617,7 @@ ppr_pvskpplot <- function(pvskpsel, lakeditch = 'ditch'){
   
   # estimate mean by name and select only those with a name
   d1 <- d1[,lapply(.SD,mean,na.rm=T),.SDcols = cols, by=c('pol','EAGIDENT',
-                                                          "a_inlaat1","a_inlaat2","a_inlaat3","a_inlaat4","a_inlaat5",
+                                                    "a_inlaat1","a_inlaat2","a_inlaat3","a_inlaat4","a_inlaat5",
                                                           "a_uitlaat1","a_uitlaat2","a_uitlaat3","a_uitlaat4",
                                                           "GAFIDENT","lake_ditch_vol")][!is.na(pol)]
 
@@ -648,7 +647,7 @@ ppr_pvskpplot <- function(pvskpsel, lakeditch = 'ditch'){
     scale_fill_manual("Bronnen (minimaal = min, incrementeel = inc)", values = colWat, 
                       guide = guide_legend(override.aes = list(size = 7)))+
     geom_point(inherit.aes = FALSE, data= d2, aes(x = naam, y= kP_comb, col = lake_ditch_vol), shape = 95, size = 20) + 
-    guides(col=guide_legend(title="Kritische belasting op basis van"))+
+    guides(col=guide_legend(title="Kritische belasting op basis van: "))+
     scale_color_manual(name = "", values= c('black','darkgrey','grey'))+
     xlab('') + ylab('mg P/m2/dag')+
     ggtitle("Fosfor- en kritische fosforbelasting per deelgebied")+
@@ -666,7 +665,7 @@ ppr_pvskpplot <- function(pvskpsel, lakeditch = 'ditch'){
           panel.grid.minor.y = element_line(),
           panel.ontop = F,
           legend.title = element_text(size = 10),
-          legend.text  = element_text(size = 10),
+          legend.text  = element_text(size = 9),
           legend.key.size = unit(0.9, "lines"),
           legend.position = "right")
     
@@ -816,27 +815,31 @@ ppr_extinctie <- function(wq1, hybi1, filter = c('EXTTCEFCELBT__m_L400-700nm', '
   medianewd <- median(hybi1[parameterid %in% filter, meetwaarde],na.rm = T)
   # meax depth of hydrobiological data
   maxwd <- max(hybi1[parameterid %in% filter, meetwaarde],na.rm = T)
-
+  q70wd <- as.numeric(quantile(hybi1[parameterid %in% filter, meetwaarde],na.rm = T, probs = 0.7))
+  
   # mean extinctie
-  wq1 <- wq1[parameterid %in% filter & jaar > 2015 & meetwaarde > 0,]
-  wq1 <- wq1[!is.na(watertype) & !is.na(EAGIDENT) & EAGIDENT != '',]
-  meanext <- mean(wq1[parameterid %in% 'EXTTCEFCELBT__m_L400-700nm', meetwaarde])
-  wq1[jaar<2019&jaar>2015,jaar_int:='2016 t/m 2018']
-  wq1[jaar<2022&jaar>2018,jaar_int:='2019 t/m 2021']
-  wq1[jaar<2025&jaar>2021,jaar_int:='2022 t/m 2024']
+  wq_ext <- wq1[parameterid %in% filter & jaar > 2015 & meetwaarde > 0,]
+  eags_ext <- unique(wq_ext[parameterid %in% 'EXTTCEFCELBT__m_L400-700nm','EAGIDENT'])
+  eags_wtd <- unique(hybi1[parameterid %in% 'WATDTE_m','EAGIDENT'])
+  wq_ext <- wq_ext[!is.na(watertype) & !is.na(EAGIDENT) & EAGIDENT != '' ,]
+  wq_ext <- wq_ext[EAGIDENT %in% eags_ext$EAGIDENT & EAGIDENT %in% eags_wtd$EAGIDENT,]
+  minext <- min(wq_ext[parameterid %in% 'EXTTCEFCELBT__m_L400-700nm', meetwaarde])
+  q95ext <- as.numeric(quantile(wq_ext[parameterid %in% 'EXTTCEFCELBT__m_L400-700nm', meetwaarde],probs = 0.99,na.rm = TRUE))
+  wq_ext[jaar<2019&jaar>2015,jaar_int:='2016 t/m 2018']
+  wq_ext[jaar<2022&jaar>2018,jaar_int:='2019 t/m 2021']
+  wq_ext[jaar<2025&jaar>2021,jaar_int:='2022 t/m 2024']
   
   # plot figure
-  p <- ggplot()+
-    geom_boxplot(data = wq1[parameterid %in% 'EXTTCEFCELBT__m_L400-700nm',], aes(x= jaar_int, y= meetwaarde), outliers = FALSE) +
+  p <- ggplot(data = wq_ext[parameterid %in% 'EXTTCEFCELBT__m_L400-700nm',])+
+    geom_boxplot(aes(x= jaar_int, y= meetwaarde), outliers = FALSE) +
+    facet_grid(.~EAGIDENT)+
     geom_hline(aes(yintercept = (log(25)/0.5), col = '0.5 meter'), show.legend = T)+
-    geom_rect(inherit.aes = FALSE, aes(xmin = 0, xmax = Inf, ymin = Inf, ymax = log(25)/0.5),fill=  'grey2', alpha = 0.3) +
     geom_hline(aes(yintercept = (log(25)), col = '1 meter'), show.legend = T)+ #vec voor 1 meter >4%
     geom_hline(aes(yintercept = (log(25))/maxwd, col = paste0(as.character(maxwd), ' meter (max diepte bemonsterd)')), show.legend = T)+ #vec voor 4 meter >4%
-    geom_hline(aes(yintercept = (log(25))/medianewd, col = paste0(as.character(medianewd), ' meter (mediane diepte)/n Op ')), show.legend = T)+ #vec voor 4 meter >4%
-    geom_rect(inherit.aes = FALSE, aes(xmin = 0, xmax = Inf, ymin = log(25)/0.5, ymax = log(25)/medianewd),fill=  'darkgrey', alpha = 0.3) +
+    geom_hline(aes(yintercept = (log(25))/q70wd, col = paste0(as.character(q70wd), ' meter (70 % watersysteem)')), show.legend = T)+ #vec voor 70% oppervlak >4%
+    geom_hline(aes(yintercept = (log(25))/medianewd, col = paste0(as.character(medianewd), ' meter (helft watersysteem)')), show.legend = T)+ #vec voor 4 meter >4%
     geom_hline(aes(yintercept = (log(25))/7, col = '7 meter'), show.legend = T)+ #vec+ voor 7 meter 4%
-    scale_y_reverse()+
-    facet_grid(.~EAGIDENT)+
+    scale_y_continuous(limits = c(minext,q95ext))+
     guides(col=guide_legend(title="4 % licht voor waterplanten op"))+
     theme_minimal()+
     theme(
@@ -853,13 +856,13 @@ ppr_extinctie <- function(wq1, hybi1, filter = c('EXTTCEFCELBT__m_L400-700nm', '
       legend.key.size = unit(0.9, "lines"),
       legend.position = "right")+
     ggtitle('') +
-    labs(x= 'Ecologisch analysegebied', y = 'Verticale extinctie (/m)')
+    labs(x= '', y = 'Verticale extinctie (/m)')
   # return plot
   return(p)
 
 }
 
-ppr_waterdieptesloot <- function(hybi1, filter = c('WATDTE_m','ZICHT_m')){
+ppr_waterdieptesloot <- function(hybi1, filter = c("SLIBDTE_m",'WATDTE_m','ZICHT_m')){
 
   # diepte4licht <- log(25)/1.2
   hybi2 <- hybi1[parameterid %in% filter ,]
@@ -889,25 +892,27 @@ ppr_waterdieptesloot <- function(hybi1, filter = c('WATDTE_m','ZICHT_m')){
   #   ggtitle('') +
   #   labs(x= '', y = 'diepte (m)')
   ##------------------
-  hybi2[jaar<2019&jaar>2015,jaar_int:='2016 t/m 2018']
-  hybi2[jaar<2022&jaar>2018,jaar_int:='2019 t/m 2021']
-  hybi2[jaar<2025&jaar>2021,jaar_int:='2022 t/m 2024']
+  hybi2[jaar<2019&jaar>2015,jaar_int:='16 t/m 18']
+  hybi2[jaar<2022&jaar>2018,jaar_int:='19 t/m 21']
+  hybi2[jaar<2025&jaar>2021,jaar_int:='22 t/m 24']
   # add N obs
   hybi2[,n_obs:=uniqueN(locatie),by =c('EAGIDENT','jaar_int')]
   hybi2[,n_obs:=paste0('Aantal monsters: ',n_obs)]
 
   sel_agg <- dcast(hybi2, EAGIDENT+jaar_int+n_obs~parameterid, value.var = 'meetwaarde', fun.aggregate = mean, fill=FALSE)
+  if(is.null(sel_agg$SLIBDTE_m)){sel_agg[,SLIBDTE_m := NA]}
   sel_agg <- sel_agg[!is.na(jaar_int),]
   p<-ggplot() +
-    geom_col(data = sel_agg, aes(x= jaar_int, y = -1*WATDTE_m, fill = 'maximale waterdiepte (m)')) +
-    geom_col(data = sel_agg, aes(x= jaar_int, y = -1*ZICHT_m, fill = 'doorzicht (m)')) +
-    scale_fill_manual(values = c("darkblue","skyblue"), na.value = "#A6761D")+
+    geom_col(data = sel_agg, aes(x= jaar_int, y = -1*WATDTE_m - SLIBDTE_m, fill = 'slibdikte (tov waterspiegel)')) +
+    geom_col(data = sel_agg, aes(x= jaar_int, y = -1*WATDTE_m, fill = 'maximale waterdiepte (tov waterspiegel)')) +
+    geom_col(data = sel_agg, aes(x= jaar_int, y = -1*ZICHT_m, fill = 'doorzicht (tov waterspiegel)')) +
+    scale_fill_manual(values = c("darkblue","skyblue","brown"), na.value = "#A6761D")+
     facet_grid(.~ EAGIDENT+n_obs, space = 'free_x', scales = 'free_x', switch = 'x')+
     theme_minimal(base_size = 15)+
     theme(
       strip.background = element_blank(),
       strip.text.y = element_text(size = 12),
-      axis.text.x = element_text(size = 15, vjust = 0.8, angle = 90),
+      axis.text.x = element_text(size = 15, vjust = 0.8, angle = 45),
       axis.text.y = element_text(size = 15),
       axis.title = element_text(size= 15),
       axis.ticks =  element_line(colour = "black"),
@@ -935,14 +940,18 @@ ppr_plotbod <- function(bod1, type='grid'){
   selb[,jaar:= as.character(jaar)]
   
   # calculate relevant ratios SB (ng & dg)
+  if(!is.null(selb$Stot_mgS_kg_dg_SB)){
   selb[,FESP_DWratio := (Fe_mg_kg_dg_SB/55.845 - Stot_mgS_kg_dg_SB/32.065)/(Ptot_gP_kg_dg_SB*1000/30.974)]
-  selb[,FESP_DWratio_FeP := (Fe_mg_kg_dg_SB/55.845)/(Ptot_gP_kg_dg_SB*1000/30.974)]
-  if(is.null(selb$Stot_mgS_l_ng_SB)){
-    selb[,FESP_FWratio := FESP_DWratio]}
+  selb[,FESP_DWratio_FeP := (Fe_mg_kg_dg_SB/55.845)/(Ptot_gP_kg_dg_SB*1000/30.974)]}
+  
   if(!is.null(selb$Stot_mgS_l_ng_SB)){
     selb[,FESP_FWratio := (Fe_mg_l_ng_SB/55.845 - Stot_mgS_l_ng_SB/32.065)/(Ptot_mgP_l_ng_SB/30.974)]
-    selb[,FESP_FWratio_FeP := (Fe_mg_l_ng_SB/55.845)/(Ptot_mgP_l_ng_SB/30.974)]}
-  # convert iron into similar parcode
+    selb[,FESP_FWratio_FeP := (Fe_mg_l_ng_SB/55.845)/(Ptot_mgP_l_ng_SB/30.974)]
+    # calculate nalevering
+    selb[,nlvr_FW := 0.0247 * Ptot_mgP_l_ng_SB - 1.6035]
+  }
+  
+  # convert iron into similar parcode PW
   if(is.null(selb$Fe_mg_l_nf_PW)&!is.null(selb$Fe_mg_l_PW)){
     selb$Fe_mg_l_nf_PW <- selb$Fe_mg_l_PW}
   if(is.null(selb$Ptot_mgP_l_nf_PW)&!is.null(selb$Ptot_mgP_l_PW)){
@@ -960,15 +969,9 @@ ppr_plotbod <- function(bod1, type='grid'){
     selb[!is.na(Stot_mgS_l_nf_PW),FESP_PWratio_FeS := (Fe_mg_l_nf_PW/55.845)/(Stot_mgS_l_nf_PW/32.065)]
     selb[,FESP_PWratio_FeP := (Fe_mg_l_nf_PW/55.845)/(Ptot_mgP_l_nf_PW/30.974)]
   }
-  # calculate nalevering
-  selb[,nlvr_FW := 0.0247 * Ptot_mgP_l_ng_SB - 1.6035]
   if(!is.null(selb$Ptot_mgP_l_nf_PW)){
     selb[,nlvr_PW := 0.8095 * selb$Ptot_mgP_l_nf_PW - 0.2905]  
   }
-  
-  # add N obs
-  selb[,n_obs:=uniqueN(locatie),by =c('EAGIDENT','jaar')]
-  selb[,n_obs:=paste0('Aantal monsters: ',n_obs)]
   
   if(nrow(selb)>0){
     #Function for scaling y axis 2 decimals
@@ -985,11 +988,19 @@ ppr_plotbod <- function(bod1, type='grid'){
   selb[nlvr_FW < 0,nlvr_FW := 0]
   selb[,jaar:= as.character(jaar)]
   
+  # add N obs
+  selb[,n_obs:=uniqueN(locatie),by =c('EAGIDENT','jaar')]
+  selb[,n_obs:=paste0('n = ',n_obs)]
+  selb[,filter := max(nlvr_FW), by = c('EAGIDENT','jaar')]
+  selb[!(filter == nlvr_FW), n_obs := NA]
+  
+  
   plotFW <- ggplot(selb, aes(x= jaar, y= nlvr_FW, fill = classFESP_FWratio))+
     geom_boxplot(outliers = FALSE) +
+    geom_text( aes(y=0,label = n_obs))+
     scale_y_continuous(labels=scaleFUN)+
     theme_minimal()+
-    facet_grid(.~EAGIDENT+n_obs)+
+    facet_grid(.~EAGIDENT)+
     theme(
       strip.background = element_blank(),
       title = element_text(size= 10),
@@ -1016,12 +1027,18 @@ ppr_plotbod <- function(bod1, type='grid'){
     selb[FESP_PWratio_FeP > 1 & FESP_PWratio_FeS <= 1, c('nlvr_PW','classFESP_PWratio') := list(0.5*nlvr_PW,'beperkte ijzerval')] # BaggerNut zegt < nlvrPW 
     selb[FESP_PWratio_FeP <= 1, c('nlvr_PW','classFESP_PWratio') := list(nlvr_PW,'geen ijzerval')]
     selb[nlvr_PW < 0,nlvr_PW := 0]
+    # add N obs
+    selb[,n_obs:=uniqueN(locatie),by =c('EAGIDENT','jaar')]
+    selb[,n_obs:=paste0('n = ',n_obs)]
+    selb[,filter := max(nlvr_PW), by = c('EAGIDENT','jaar')]
+    selb[!(filter == nlvr_PW), n_obs := NA]
     
   qPW <- ggplot(selb, aes(x= jaar, y= nlvr_PW, fill = classFESP_PWratio))+
       geom_boxplot(outliers = FALSE) +
+      geom_text( aes(y=0,label = n_obs))+
       scale_y_continuous(labels=scaleFUN)+
       theme_minimal()+
-      facet_grid(.~EAGIDENT+n_obs)+
+      facet_grid(.~EAGIDENT)+
       theme(
         strip.background = element_blank(),
         title = element_text(size= 10),
@@ -1044,10 +1061,18 @@ ppr_plotbod <- function(bod1, type='grid'){
   if(!is.null(selb$Ptot_gP_kg_dg_SB)){  
     selb <- selb[!(is.na(FESP_DWratio)),]
     selb[,classFESP_DWratio := cut(FESP_DWratio, breaks = c((min(FESP_DWratio)-1), 1.4, 4, max(FESP_DWratio)), labels = c('geen ijzerval', 'beperkte ijzerval', 'functionele ijzerval'))]
-  qBS <- ggplot(selb, aes(x= jaar, y= Ptot_gP_kg_dg_SB, fill = classFESP_DWratio))+
+  
+    # add N obs
+    selb[,n_obs:=uniqueN(locatie),by =c('EAGIDENT','jaar')]
+    selb[,n_obs:=paste0('n = ',n_obs)]
+    selb[,filter := max(Ptot_gP_kg_dg_SB), by = c('EAGIDENT','jaar')]
+    selb[!(filter == Ptot_gP_kg_dg_SB), n_obs := NA]
+    
+    qBS <- ggplot(selb, aes(x= jaar, y= Ptot_gP_kg_dg_SB, fill = classFESP_DWratio))+
     geom_boxplot(outliers = FALSE) +
+    geom_text( aes(y=0,label = n_obs))+
     scale_y_continuous(labels=scaleFUN)+
-      facet_grid(.~EAGIDENT+n_obs)+
+      facet_grid(.~EAGIDENT)+
     theme_minimal()+
     theme(
       strip.background = element_blank(),
@@ -1071,13 +1096,13 @@ ppr_plotbod <- function(bod1, type='grid'){
   # plot figure
   if(type=='plotFW'){out = plotFW}
   if(type=='plotqPW'){out = qPW}
-  if(type=='grid' & !is.null(selb$FESPPWratio) & !is.null(selb$FESPFWratio)){out = plot_grid(plotFW, qPW, ncol = 1, align = "v")}
-  if(type=='grid' & !is.null(selb$FESPPWratio) & !is.null(selb$FESPFWratio) & !is.null(selb$Ptot_gP_kg_dg_SB)){out = plot_grid(plotFW, qPW, qBS, ncol = 1, align = "v")}
-  if(type=='grid' & is.null(selb$FESPPWratio) & !is.null(selb$FESPFWratio)){out = plotFW}
-  if(type=='grid' & is.null(selb$FESPPWratio) & !is.null(selb$FESPFWratio)& !is.null(selb$Ptot_gP_kg_dg_SB)){out = plot_grid(plotFW, qBS, ncol = 1, align = "v")}
-  if(type=='grid' & !is.null(selb$FESPPWratio) & is.null(selb$FESPFWratio)){out = qPW}
-  if(type=='grid' & !is.null(selb$FESPPWratio) & is.null(selb$FESPFWratio)& !is.null(selb$Ptot_gP_kg_dg_SB)){out = plot_grid(qPW, qBS, ncol = 1, align = "v")}
-  if(type=='grid' & is.null(selb$FESPPWratio) & is.null(selb$FESPFWratio) & !is.null(selb$Ptot_gP_kg_dg_SB)){out = qBS}  
+  if(type=='grid' & !is.null(selb$FESP_PWratio) & is.null(selb$FESP_FWratio)){out = qPW}  
+  if(type=='grid' & is.null(selb$FESP_PWratio) & !is.null(selb$FESP_FWratio)){out = plotFW}
+  if(type=='grid' & !is.null(selb$FESP_FWratio) & !is.null(selb$Ptot_gP_kg_dg_SB)){out = plot_grid(plotFW, qBS, ncol = 1, align = "v")}
+  if(type=='grid' & !is.null(selb$FESP_PWratio)& !is.null(selb$Ptot_gP_kg_dg_SB)){out = plot_grid(qPW, qBS, ncol = 1, align = "v")}
+  if(type=='grid' & !is.null(selb$FESP_PWratio) & !is.null(selb$FESP_FWratio)){out = plot_grid(plotFW, qPW, ncol = 1, align = "v")}
+  if(type=='grid' & !is.null(selb$FESP_PWratio) & !is.null(selb$FESP_FWratio) & !is.null(selb$Ptot_gP_kg_dg_SB)){out = plot_grid(plotFW, qPW, qBS, ncol = 1, align = "v")}
+    
   # return output
   return(out)
   }

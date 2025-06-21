@@ -110,8 +110,7 @@ if(outputF == "html"){
 knitr::kable(pESFtab, format = "html", col.names = NULL) %>% 
           kable_styling(full_width=FALSE) %>% 
           column_spec(1, border_right = F) %>%
-          column_spec(2, width = "120em")%>%
-          collapse_rows(columns=1, valign="top")
+          column_spec(2, width = "120em")
 }
 
 ```
@@ -271,7 +270,7 @@ if(nrow(pvskplegend_tab)>0){
 
 ### Brondata: Metingen fysisch-chemie (`r out$wqversie`) en hydrobiologie (`r out$hybiversie`)
 
-Verticale extinctie is een maat voor de uitdoving van neerwaarts gericht licht in het water. Licht verzwakt onder water doordat het wordt geabsorbeerd en gereflecteerd door deeltjes (algen, humus, zwevend-stof) en water zelf. Hoe hoger de extinctie, hoe minder licht er op de waterbodem valt (let op: een hoge extinctie staat lager op de y-as dan een lage) en hoe minder licht er beschikbaar is voor plantengroei. In de figuur met verticale extinctie staan referentielijnen met extincties waarbij nog voldoende (4%) licht op de bodem valt voor plantengroei. Als de extinctie lager is (hoger in de grafiek) dan deze lijnen, valt er voldoende licht voor plantengroei op deze diepte. In sloten wordt geen verticale extinctie gemeten. Hier laat de grafiek de waterdiepte en het doorzicht zien. Bij een doorzicht/waterdiepte groter dan 0.6 valt er voldoende licht op de waterbodem voor plantengroei. Als de waterdiepte minder is dan 35 cm kan er vaak wel licht tot de bodem doordringen, maar is de waterdiepte zelf een belemmering voor plantengroei.
+In plassen en kanalen wordt de verticale extinctie weergegeven en in sloten de waterdiepte en het doorzicht. Verticale extinctie is een maat voor de uitdoving van neerwaarts gericht licht in het water. Licht verzwakt onder water doordat het wordt geabsorbeerd en gereflecteerd door deeltjes (algen, humus, zwevend-stof) en water zelf. Hoe hoger de extinctie, hoe minder licht er op de waterbodem valt voor plantengroei. In de figuur met verticale extinctie staan referentielijnen met extincties waarbij nog voldoende (4%) licht op de bodem valt voor plantengroei. Als de extinctie lager is dan deze lijnen, valt er voldoende licht voor plantengroei op tenminste deze diepte. In sloten wordt geen verticale extinctie gemeten. Hier laat de grafiek de waterdiepte en het doorzicht zien. Bij een doorzicht/waterdiepte groter dan 0.6 valt er voldoende licht op de waterbodem voor plantengroei. Een waterdiepte kleiner dan 35 cm is belemmerend voor plantengroei.
 
 ### Brondata: Metingen waterbodemchemie (`r out$bodversie`)
 
