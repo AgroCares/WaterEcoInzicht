@@ -912,7 +912,7 @@ ppr_waterdieptesloot <- function(hybi1, filter = c("SLIBDTE_m",'WATDTE_m','ZICHT
     theme(
       strip.background = element_blank(),
       strip.text.y = element_text(size = 12),
-      axis.text.x = element_text(size = 15, vjust = 0.8, angle = 45),
+      axis.text.x = element_text(size = 15, vjust = 0, angle = 45),
       axis.text.y = element_text(size = 15),
       axis.title = element_text(size= 15),
       axis.ticks =  element_line(colour = "black"),
@@ -997,7 +997,7 @@ ppr_plotbod <- function(bod1, type='grid'){
   
   plotFW <- ggplot(selb, aes(x= jaar, y= nlvr_FW, fill = classFESP_FWratio))+
     geom_boxplot(outliers = FALSE) +
-    geom_text( aes(y=0,label = n_obs))+
+    geom_text( aes(y=0.1,label = n_obs))+
     scale_y_continuous(labels=scaleFUN)+
     theme_minimal()+
     facet_grid(.~EAGIDENT)+
@@ -1035,7 +1035,7 @@ ppr_plotbod <- function(bod1, type='grid'){
     
   qPW <- ggplot(selb, aes(x= jaar, y= nlvr_PW, fill = classFESP_PWratio))+
       geom_boxplot(outliers = FALSE) +
-      geom_text( aes(y=0,label = n_obs))+
+      geom_text( aes(y=0.1,label = n_obs))+
       scale_y_continuous(labels=scaleFUN)+
       theme_minimal()+
       facet_grid(.~EAGIDENT)+
@@ -1070,7 +1070,7 @@ ppr_plotbod <- function(bod1, type='grid'){
     
     qBS <- ggplot(selb, aes(x= jaar, y= Ptot_gP_kg_dg_SB, fill = classFESP_DWratio))+
     geom_boxplot(outliers = FALSE) +
-    geom_text( aes(y=0,label = n_obs))+
+    geom_text( aes(y=0.1,label = n_obs))+
     scale_y_continuous(labels=scaleFUN)+
       facet_grid(.~EAGIDENT)+
     theme_minimal()+

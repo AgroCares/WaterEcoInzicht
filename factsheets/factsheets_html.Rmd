@@ -246,7 +246,7 @@ include_graphics(out$plotWaterbodem)
 
 ## 
 
-### Brondata: Water- en stoffenbalansen (balans t/m `r out$pvskpversie`) 
+### Brondata: Water- en stoffenbalansen (balans t/m `r out$pvskpversie`). De kritische grenzen (met pclake en/of pcditch) zijn berekend met het metamodel.
 
 
 ```{r watbaltable, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
